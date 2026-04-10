@@ -1,10 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import {
-  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
-} from 'recharts';
 import { supabase } from '../lib/supabaseClient';
 
 export default function Dashboard() {
@@ -13,8 +9,10 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [dateRange, setDateRange] = useState('week');
+  const [activeTab, setActiveTab] = useState('timer');
+  const [activeProject, setActiveProject] = useState(null);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectRate, setNewProjectRate] = useState('');
@@ -32,6 +30,14 @@ export default function Dashboard() {
     checkAuth();
   }, [router]);
 
+  useEffect(() => {
+    let interval;
+    if (isRunning) {
+      interval = setInterval(() => setTimerSeconds(s => s + 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isRunning]);
+
   const loadData = async (userId) => {
     try {
       const { data: projectsData } = await supabase
@@ -48,6 +54,9 @@ export default function Dashboard() {
 
       setProjects(projectsData || []);
       setSessions(sessionsData || []);
+      if (projectsData?.length > 0) {
+        setActiveProject(projectsData[0].id);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -55,11 +64,46 @@ export default function Dashboard() {
     }
   };
 
+  const formatTime = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  const startSession = async () => {
+    if (!activeProject) {
+      alert('Selecciona un proyecto primero');
+      return;
+    }
+    setIsRunning(true);
+  };
+
+  const stopSession = async () => {
+    if (!isRunning) return;
+    setIsRunning(false);
+
+    try {
+      await supabase.from('sessions').insert([
+        {
+          user_id: user.id,
+          project_id: activeProject,
+          start_time: Math.floor(Date.now() / 1000) - timerSeconds,
+          end_time: Math.floor(Date.now() / 1000),
+        }
+      ]);
+      setTimerSeconds(0);
+      loadData(user.id);
+    } catch (error) {
+      console.error('Error saving session:', error);
+    }
+  };
+
   const addProject = async () => {
     if (!newProjectName || !newProjectRate) return;
 
     try {
-      const { error } = await supabase
+      const { data } = await supabase
         .from('projects')
         .insert([
           {
@@ -67,14 +111,16 @@ export default function Dashboard() {
             name: newProjectName,
             rate: parseFloat(newProjectRate),
           }
-        ]);
+        ])
+        .select();
 
-      if (!error) {
-        setNewProjectName('');
-        setNewProjectRate('');
-        setShowNewProject(false);
-        loadData(user.id);
+      if (data?.[0]) {
+        setActiveProject(data[0].id);
       }
+      setNewProjectName('');
+      setNewProjectRate('');
+      setShowNewProject(false);
+      loadData(user.id);
     } catch (error) {
       console.error('Error adding project:', error);
     }
@@ -86,6 +132,9 @@ export default function Dashboard() {
     try {
       await supabase.from('sessions').delete().eq('project_id', projectId);
       await supabase.from('projects').delete().eq('id', projectId);
+      if (activeProject === projectId) {
+        setActiveProject(projects.find(p => p.id !== projectId)?.id || null);
+      }
       loadData(user.id);
     } catch (error) {
       console.error('Error deleting project:', error);
@@ -98,6 +147,10 @@ export default function Dashboard() {
         .from('projects')
         .update({ archived: true })
         .eq('id', projectId);
+      if (activeProject === projectId) {
+        const newActive = projects.find(p => p.id !== projectId && !p.archived);
+        setActiveProject(newActive?.id || null);
+      }
       loadData(user.id);
     } catch (error) {
       console.error('Error archiving project:', error);
@@ -107,7 +160,7 @@ export default function Dashboard() {
   const exportToCSV = () => {
     if (sessions.length === 0) return;
 
-    const headers = ['Proyecto', 'Inicio', 'Fin', 'Duración (horas)', 'Tarifa €/h', 'Ingresos €'];
+    const headers = ['Proyecto', 'Inicio', 'Duración (horas)', 'Tarifa €/h', 'Ingresos €'];
     const rows = sessions.map(session => {
       const project = projects.find(p => p.id === session.project_id);
       const duration = (session.end_time - session.start_time) / 3600;
@@ -115,7 +168,6 @@ export default function Dashboard() {
       return [
         project?.name || 'N/A',
         new Date(session.created_at).toLocaleString('es-ES'),
-        session.end_time ? new Date(session.end_time * 1000).toLocaleString('es-ES') : 'En curso',
         duration.toFixed(2),
         project?.rate || 0,
         earnings.toFixed(2)
@@ -131,29 +183,20 @@ export default function Dashboard() {
     a.click();
   };
 
-  // Calcular estadísticas
-  const totalSessions = sessions.length;
-  const totalHours = sessions.reduce((sum, s) => sum + (s.end_time - s.start_time) / 3600, 0);
-  const totalEarnings = sessions.reduce((sum, s) => {
+  // Estadísticas semana
+  const weekSessions = sessions.filter(s => {
+    const sessionDate = new Date(s.created_at);
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    return sessionDate >= weekAgo;
+  });
+
+  const weekHours = weekSessions.reduce((sum, s) => sum + (s.end_time - s.start_time) / 3600, 0);
+  const weekEarnings = weekSessions.reduce((sum, s) => {
     const project = projects.find(p => p.id === s.project_id);
     const duration = (s.end_time - s.start_time) / 3600;
     return sum + duration * (project?.rate || 0);
   }, 0);
-  const avgRate = projects.length > 0 ? (totalEarnings / totalHours).toFixed(2) : 0;
-
-  // Datos para gráficos
-  const projectStats = projects.filter(p => !p.archived).map(project => {
-    const projectSessions = sessions.filter(s => s.project_id === project.id);
-    const hours = projectSessions.reduce((sum, s) => sum + (s.end_time - s.start_time) / 3600, 0);
-    const earnings = hours * project.rate;
-    return {
-      name: project.name,
-      hours: parseFloat(hours.toFixed(2)),
-      earnings: parseFloat(earnings.toFixed(2))
-    };
-  });
-
-  const COLORS = ['#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;
 
@@ -166,7 +209,7 @@ export default function Dashboard() {
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
         <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+          <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold">⏱</span>
@@ -186,24 +229,88 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
+        </header>
+
+        <main className="max-w-6xl mx-auto px-6 py-10">
+          {/* Timer Section */}
+          <div className="bg-gradient-to-br from-blue-50 to-white p-12 rounded-2xl shadow-sm border border-blue-200 mb-10">
+            <div className="text-center">
+              {/* Timer Grande */}
+              <div className="text-7xl font-bold text-blue-600 font-mono mb-6 tracking-wider">
+                {formatTime(timerSeconds)}
+              </div>
+
+              {/* Selector de Proyecto */}
+              <div className="mb-8">
+                <label className="block text-sm font-semibold text-gray-700 mb-3">Proyecto activo</label>
+                <select
+                  value={activeProject || ''}
+                  onChange={(e) => setActiveProject(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-center font-semibold"
+                >
+                  <option value="">Selecciona un proyecto</option>
+                  {projects.filter(p => !p.archived).map(p => (
+                    <option key={p.id} value={p.id}>{p.name} (€{p.rate}/h)</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Botones Timer */}
+              <div className="flex gap-4 justify-center mb-8">
+                {!isRunning ? (
+                  <button
+                    onClick={startSession}
+                    className="px-10 py-4 bg-blue-600 text-white rounded-lg font-bold text-lg hover:bg-blue-700 shadow-lg hover:shadow-xl transition transform hover:scale-105"
+                  >
+                    ▶ Empezar
+                  </button>
+                ) : (
+                  <button
+                    onClick={stopSession}
+                    className="px-10 py-4 bg-red-600 text-white rounded-lg font-bold text-lg hover:bg-red-700 shadow-lg hover:shadow-xl transition transform hover:scale-105"
+                  >
+                    ⏹ Parar
+                  </button>
+                )}
+              </div>
+
+              {/* Stats Esta Semana */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  <p className="text-gray-600 text-sm mb-1">Esta semana: Horas</p>
+                  <p className="text-3xl font-bold text-gray-900">{weekHours.toFixed(1)}h</p>
+                </div>
+                <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  <p className="text-gray-600 text-sm mb-1">Esta semana: Ganado</p>
+                  <p className="text-3xl font-bold text-green-600">€{weekEarnings.toFixed(2)}</p>
+                </div>
+                <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  <p className="text-gray-600 text-sm mb-1">Tarifa promedio</p>
+                  <p className="text-3xl font-bold text-blue-600">
+                    €{weekHours > 0 ? (weekEarnings / weekHours).toFixed(0) : 0}/h
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Tabs */}
-          <div className="max-w-7xl mx-auto px-6 flex gap-8 border-t border-gray-200">
+          <div className="flex gap-4 mb-8 border-b border-gray-200">
             <button
-              onClick={() => setActiveTab('overview')}
-              className={`py-4 border-b-2 transition ${
-                activeTab === 'overview'
-                  ? 'border-blue-600 text-blue-600 font-semibold'
+              onClick={() => setActiveTab('timer')}
+              className={`py-3 px-6 font-semibold border-b-2 transition ${
+                activeTab === 'timer'
+                  ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
-              📊 Resumen
+              ⏱ Timer
             </button>
             <button
               onClick={() => setActiveTab('projects')}
-              className={`py-4 border-b-2 transition ${
+              className={`py-3 px-6 font-semibold border-b-2 transition ${
                 activeTab === 'projects'
-                  ? 'border-blue-600 text-blue-600 font-semibold'
+                  ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -211,99 +318,19 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setActiveTab('sessions')}
-              className={`py-4 border-b-2 transition ${
+              className={`py-3 px-6 font-semibold border-b-2 transition ${
                 activeTab === 'sessions'
-                  ? 'border-blue-600 text-blue-600 font-semibold'
+                  ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
               ⏰ Sesiones
             </button>
           </div>
-        </header>
-
-        <main className="max-w-7xl mx-auto px-6 py-10">
-          {/* OVERVIEW TAB */}
-          {activeTab === 'overview' && (
-            <div className="space-y-8">
-              {/* Stats Cards */}
-              <div className="grid md:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                  <p className="text-gray-600 text-sm mb-2">⏱ Horas totales</p>
-                  <p className="text-4xl font-bold text-gray-900">{totalHours.toFixed(1)}h</p>
-                </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                  <p className="text-gray-600 text-sm mb-2">💰 Ingresos totales</p>
-                  <p className="text-4xl font-bold text-green-600">€{totalEarnings.toFixed(2)}</p>
-                </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                  <p className="text-gray-600 text-sm mb-2">📊 Tarifa promedio</p>
-                  <p className="text-4xl font-bold text-blue-600">€{avgRate}/h</p>
-                </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                  <p className="text-gray-600 text-sm mb-2">🎯 Sesiones</p>
-                  <p className="text-4xl font-bold text-purple-600">{totalSessions}</p>
-                </div>
-              </div>
-
-              {/* Charts */}
-              {projectStats.length > 0 && (
-                <div className="grid md:grid-cols-2 gap-8">
-                  {/* Ingresos por proyecto */}
-                  <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-                    <h3 className="font-bold text-lg text-gray-900 mb-6">Ingresos por proyecto</h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={projectStats}
-                          dataKey="earnings"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={100}
-                          label
-                        >
-                          {projectStats.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value) => `€${value.toFixed(2)}`} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  {/* Horas por proyecto */}
-                  <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-                    <h3 className="font-bold text-lg text-gray-900 mb-6">Horas por proyecto</h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={projectStats}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
-                        <YAxis />
-                        <Tooltip formatter={(value) => `${value.toFixed(2)}h`} />
-                        <Bar dataKey="hours" fill="#3b82f6" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
-
-              {/* Botones de acción */}
-              <div className="flex gap-4">
-                <button
-                  onClick={exportToCSV}
-                  className="px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition"
-                >
-                  📥 Exportar CSV
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* PROJECTS TAB */}
           {activeTab === 'projects' && (
-            <div className="space-y-8">
-              {/* Nuevo proyecto */}
+            <div className="space-y-6">
               {showNewProject && (
                 <div className="bg-white p-8 rounded-xl shadow-sm border border-blue-200">
                   <h3 className="font-bold text-lg mb-6">Nuevo proyecto</h3>
@@ -349,7 +376,6 @@ export default function Dashboard() {
                 </button>
               )}
 
-              {/* Listado de proyectos */}
               <div className="grid md:grid-cols-2 gap-6">
                 {projects.filter(p => !p.archived).map(project => {
                   const projectSessions = sessions.filter(s => s.project_id === project.id);
@@ -379,70 +405,57 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <p className="text-gray-600">
-                          <strong>Horas:</strong> {hours.toFixed(2)}h
-                        </p>
-                        <p className="text-gray-600">
-                          <strong>Ingresos:</strong> <span className="text-green-600 font-semibold">€{earnings.toFixed(2)}</span>
-                        </p>
-                        <p className="text-gray-600">
-                          <strong>Sesiones:</strong> {projectSessions.length}
-                        </p>
+                        <p className="text-gray-600"><strong>Horas:</strong> {hours.toFixed(2)}h</p>
+                        <p className="text-gray-600"><strong>Ingresos:</strong> <span className="text-green-600 font-semibold">€{earnings.toFixed(2)}</span></p>
+                        <p className="text-gray-600"><strong>Sesiones:</strong> {projectSessions.length}</p>
                       </div>
                     </div>
                   );
                 })}
               </div>
-
-              {projects.filter(p => p.archived).length > 0 && (
-                <div>
-                  <h3 className="font-bold text-lg text-gray-900 mb-4">Proyectos archivados</h3>
-                  <div className="grid md:grid-cols-2 gap-6">
-                    {projects.filter(p => p.archived).map(project => (
-                      <div key={project.id} className="bg-gray-50 p-6 rounded-xl border border-gray-200 opacity-60">
-                        <p className="font-semibold text-gray-600">{project.name}</p>
-                        <p className="text-sm text-gray-500">Archivado</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
           {/* SESSIONS TAB */}
           {activeTab === 'sessions' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Proyecto</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Inicio</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Duración</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Tarifa</th>
-                      <th className="px-6 py-3 text-right text-sm font-semibold text-gray-900">Ingresos</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sessions.map((session) => {
-                      const project = projects.find(p => p.id === session.project_id);
-                      const duration = (session.end_time - session.start_time) / 3600;
-                      const earnings = duration * (project?.rate || 0);
-                      return (
-                        <tr key={session.id} className="border-b border-gray-200 hover:bg-gray-50">
-                          <td className="px-6 py-4 text-sm text-gray-900">{project?.name || 'N/A'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">
-                            {new Date(session.created_at).toLocaleString('es-ES')}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900 font-semibold">{duration.toFixed(2)}h</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">€{project?.rate || 0}/h</td>
-                          <td className="px-6 py-4 text-right text-sm font-semibold text-green-600">€{earnings.toFixed(2)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            <div className="space-y-6">
+              <button
+                onClick={exportToCSV}
+                className="px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition"
+              >
+                📥 Exportar CSV
+              </button>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Proyecto</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Inicio</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Duración</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Tarifa</th>
+                        <th className="px-6 py-3 text-right text-sm font-semibold text-gray-900">Ingresos</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sessions.map((session) => {
+                        const project = projects.find(p => p.id === session.project_id);
+                        const duration = (session.end_time - session.start_time) / 3600;
+                        const earnings = duration * (project?.rate || 0);
+                        return (
+                          <tr key={session.id} className="border-b border-gray-200 hover:bg-gray-50">
+                            <td className="px-6 py-4 text-sm text-gray-900">{project?.name || 'N/A'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{new Date(session.created_at).toLocaleString('es-ES')}</td>
+                            <td className="px-6 py-4 text-sm text-gray-900 font-semibold">{duration.toFixed(2)}h</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">€{project?.rate || 0}/h</td>
+                            <td className="px-6 py-4 text-right text-sm font-semibold text-green-600">€{earnings.toFixed(2)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
