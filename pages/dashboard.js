@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
-import Head from 'next/head';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
+import {
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
 import { supabase } from '../lib/supabaseClient';
 
 export default function Dashboard() {
@@ -8,13 +12,13 @@ export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
   const [sessions, setSessions] = useState([]);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [currentProject, setCurrentProject] = useState('');
-  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [dateRange, setDateRange] = useState('week');
+  const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectRate, setNewProjectRate] = useState('');
 
-  // Check auth
   useEffect(() => {
     const checkAuth = async () => {
       const { data } = await supabase.auth.getSession();
@@ -23,111 +27,135 @@ export default function Dashboard() {
         return;
       }
       setUser(data.session.user);
-      fetchProjects(data.session.user.id);
-      fetchSessions(data.session.user.id);
+      loadData(data.session.user.id);
     };
     checkAuth();
   }, [router]);
 
-  // Timer interval
-  useEffect(() => {
-    if (!isTimerRunning) return;
-    const interval = setInterval(() => {
-      setTimerSeconds((s) => s + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isTimerRunning]);
+  const loadData = async (userId) => {
+    try {
+      const { data: projectsData } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-  const fetchProjects = async (userId) => {
-    const { data } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    setProjects(data || []);
-  };
+      const { data: sessionsData } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-  const fetchSessions = async (userId) => {
-    const { data } = await supabase
-      .from('sessions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    setSessions(data || []);
+      setProjects(projectsData || []);
+      setSessions(sessionsData || []);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const addProject = async () => {
     if (!newProjectName || !newProjectRate) return;
-    
-    const { error } = await supabase.from('projects').insert([
-      {
-        user_id: user.id,
-        name: newProjectName,
-        hourly_rate: parseFloat(newProjectRate),
-      },
-    ]);
-    
-    if (!error) {
-      setNewProjectName('');
-      setNewProjectRate('');
-      fetchProjects(user.id);
+
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .insert([
+          {
+            user_id: user.id,
+            name: newProjectName,
+            rate: parseFloat(newProjectRate),
+          }
+        ]);
+
+      if (!error) {
+        setNewProjectName('');
+        setNewProjectRate('');
+        setShowNewProject(false);
+        loadData(user.id);
+      }
+    } catch (error) {
+      console.error('Error adding project:', error);
     }
   };
 
-  const startTimer = () => {
-    if (!currentProject) {
-      alert('Elige un proyecto primero');
-      return;
-    }
-    setIsTimerRunning(true);
-  };
+  const deleteProject = async (projectId) => {
+    if (!confirm('¿Eliminar este proyecto? Se borrará todo el historial.')) return;
 
-  const stopTimer = async () => {
-    setIsTimerRunning(false);
-    
-    const project = projects.find((p) => p.id === currentProject);
-    if (!project) return;
-
-    const { error } = await supabase.from('sessions').insert([
-      {
-        user_id: user.id,
-        project_id: currentProject,
-        duration_seconds: timerSeconds,
-        earned: (timerSeconds / 3600) * project.hourly_rate,
-      },
-    ]);
-
-    if (!error) {
-      setTimerSeconds(0);
-      fetchSessions(user.id);
+    try {
+      await supabase.from('sessions').delete().eq('project_id', projectId);
+      await supabase.from('projects').delete().eq('id', projectId);
+      loadData(user.id);
+    } catch (error) {
+      console.error('Error deleting project:', error);
     }
   };
 
-  const formatTime = (seconds) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  const archiveProject = async (projectId) => {
+    try {
+      await supabase
+        .from('projects')
+        .update({ archived: true })
+        .eq('id', projectId);
+      loadData(user.id);
+    } catch (error) {
+      console.error('Error archiving project:', error);
+    }
   };
 
-  const logout = async () => {
-    await supabase.auth.signOut();
-    router.push('/');
+  const exportToCSV = () => {
+    if (sessions.length === 0) return;
+
+    const headers = ['Proyecto', 'Inicio', 'Fin', 'Duración (horas)', 'Tarifa €/h', 'Ingresos €'];
+    const rows = sessions.map(session => {
+      const project = projects.find(p => p.id === session.project_id);
+      const duration = (session.end_time - session.start_time) / 3600;
+      const earnings = duration * (project?.rate || 0);
+      return [
+        project?.name || 'N/A',
+        new Date(session.created_at).toLocaleString('es-ES'),
+        session.end_time ? new Date(session.end_time * 1000).toLocaleString('es-ES') : 'En curso',
+        duration.toFixed(2),
+        project?.rate || 0,
+        earnings.toFixed(2)
+      ];
+    });
+
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `timely-data-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
   };
 
-  // Calculate stats
-  const thisWeekSessions = sessions.filter((s) => {
-    const sessionDate = new Date(s.created_at);
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    return sessionDate >= weekAgo;
+  // Calcular estadísticas
+  const totalSessions = sessions.length;
+  const totalHours = sessions.reduce((sum, s) => sum + (s.end_time - s.start_time) / 3600, 0);
+  const totalEarnings = sessions.reduce((sum, s) => {
+    const project = projects.find(p => p.id === s.project_id);
+    const duration = (s.end_time - s.start_time) / 3600;
+    return sum + duration * (project?.rate || 0);
+  }, 0);
+  const avgRate = projects.length > 0 ? (totalEarnings / totalHours).toFixed(2) : 0;
+
+  // Datos para gráficos
+  const projectStats = projects.filter(p => !p.archived).map(project => {
+    const projectSessions = sessions.filter(s => s.project_id === project.id);
+    const hours = projectSessions.reduce((sum, s) => sum + (s.end_time - s.start_time) / 3600, 0);
+    const earnings = hours * project.rate;
+    return {
+      name: project.name,
+      hours: parseFloat(hours.toFixed(2)),
+      earnings: parseFloat(earnings.toFixed(2))
+    };
   });
 
-  const totalEarned = thisWeekSessions.reduce((sum, s) => sum + (s.earned || 0), 0);
-  const totalHours = thisWeekSessions.reduce((sum, s) => sum + s.duration_seconds / 3600, 0);
+  const COLORS = ['#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-  if (!user) return <div className="min-h-screen bg-white flex items-center justify-center">Cargando...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;
 
   return (
     <>
@@ -137,168 +165,288 @@ export default function Dashboard() {
 
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-          <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold">⏱</span>
               </div>
               <span className="font-bold text-xl">Timely</span>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600">{user.email}</span>
-              <button onClick={logout} className="text-sm text-gray-600 hover:text-gray-900">
+              <span className="text-sm text-gray-600">{user?.email}</span>
+              <button
+                onClick={() => {
+                  supabase.auth.signOut();
+                  router.push('/');
+                }}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+              >
                 Salir
               </button>
             </div>
           </div>
+
+          {/* Tabs */}
+          <div className="max-w-7xl mx-auto px-6 flex gap-8 border-t border-gray-200">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`py-4 border-b-2 transition ${
+                activeTab === 'overview'
+                  ? 'border-blue-600 text-blue-600 font-semibold'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              📊 Resumen
+            </button>
+            <button
+              onClick={() => setActiveTab('projects')}
+              className={`py-4 border-b-2 transition ${
+                activeTab === 'projects'
+                  ? 'border-blue-600 text-blue-600 font-semibold'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              📁 Proyectos
+            </button>
+            <button
+              onClick={() => setActiveTab('sessions')}
+              className={`py-4 border-b-2 transition ${
+                activeTab === 'sessions'
+                  ? 'border-blue-600 text-blue-600 font-semibold'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              ⏰ Sesiones
+            </button>
+          </div>
         </header>
 
-        <div className="max-w-6xl mx-auto px-6 py-8">
-          {/* Timer Section */}
-          <div className="bg-white rounded-lg p-8 mb-8 shadow-sm">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Timer</h2>
-            
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Left: Timer Display */}
-              <div>
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-12 text-center mb-6">
-                  <div className="text-6xl font-bold text-blue-600 font-mono">
-                    {formatTime(timerSeconds)}
+        <main className="max-w-7xl mx-auto px-6 py-10">
+          {/* OVERVIEW TAB */}
+          {activeTab === 'overview' && (
+            <div className="space-y-8">
+              {/* Stats Cards */}
+              <div className="grid md:grid-cols-4 gap-6">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <p className="text-gray-600 text-sm mb-2">⏱ Horas totales</p>
+                  <p className="text-4xl font-bold text-gray-900">{totalHours.toFixed(1)}h</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <p className="text-gray-600 text-sm mb-2">💰 Ingresos totales</p>
+                  <p className="text-4xl font-bold text-green-600">€{totalEarnings.toFixed(2)}</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <p className="text-gray-600 text-sm mb-2">📊 Tarifa promedio</p>
+                  <p className="text-4xl font-bold text-blue-600">€{avgRate}/h</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <p className="text-gray-600 text-sm mb-2">🎯 Sesiones</p>
+                  <p className="text-4xl font-bold text-purple-600">{totalSessions}</p>
+                </div>
+              </div>
+
+              {/* Charts */}
+              {projectStats.length > 0 && (
+                <div className="grid md:grid-cols-2 gap-8">
+                  {/* Ingresos por proyecto */}
+                  <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+                    <h3 className="font-bold text-lg text-gray-900 mb-6">Ingresos por proyecto</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={projectStats}
+                          dataKey="earnings"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={100}
+                          label
+                        >
+                          {projectStats.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => `€${value.toFixed(2)}`} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Horas por proyecto */}
+                  <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+                    <h3 className="font-bold text-lg text-gray-900 mb-6">Horas por proyecto</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={projectStats}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
+                        <YAxis />
+                        <Tooltip formatter={(value) => `${value.toFixed(2)}h`} />
+                        <Bar dataKey="hours" fill="#3b82f6" />
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
+              )}
 
-                <div className="flex gap-4">
-                  {!isTimerRunning ? (
-                    <button
-                      onClick={startTimer}
-                      className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700"
-                    >
-                      ▶ Empezar
-                    </button>
-                  ) : (
-                    <button
-                      onClick={stopTimer}
-                      className="flex-1 bg-red-600 text-white py-3 rounded-lg font-bold hover:bg-red-700"
-                    >
-                      ⏹ Parar
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Right: Project Selection */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Proyecto
-                </label>
-                <select
-                  value={currentProject}
-                  onChange={(e) => setCurrentProject(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-6 focus:outline-none focus:border-blue-600"
-                >
-                  <option value="">Elige proyecto...</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} (€{p.hourly_rate}/h)
-                    </option>
-                  ))}
-                </select>
-
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600">
-                    En esta sesión ganarás aproximadamente:
-                  </p>
-                  <p className="text-2xl font-bold text-blue-600 mt-2">
-                    €
-                    {currentProject && projects.find((p) => p.id === currentProject)
-                      ? (
-                          (timerSeconds / 3600) *
-                          projects.find((p) => p.id === currentProject).hourly_rate
-                        ).toFixed(2)
-                      : '0.00'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="grid md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <p className="text-gray-600 text-sm mb-2">Esta semana: Horas</p>
-              <p className="text-3xl font-bold text-gray-900">{totalHours.toFixed(1)}h</p>
-            </div>
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <p className="text-gray-600 text-sm mb-2">Esta semana: Ganado</p>
-              <p className="text-3xl font-bold text-green-600">€{totalEarned.toFixed(2)}</p>
-            </div>
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <p className="text-gray-600 text-sm mb-2">Tarifa promedio</p>
-              <p className="text-3xl font-bold text-blue-600">
-                €{totalHours > 0 ? (totalEarned / totalHours).toFixed(0) : '0'}/h
-              </p>
-            </div>
-          </div>
-
-          {/* Manage Projects */}
-          <div className="bg-white rounded-lg p-8 shadow-sm">
-            <h3 className="text-xl font-bold text-gray-900 mb-6">Gestiona tus proyectos</h3>
-            
-            <div className="grid md:grid-cols-2 gap-6 mb-8">
-              <input
-                type="text"
-                placeholder="Nombre del proyecto"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600"
-              />
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  placeholder="Tarifa €/hora"
-                  value={newProjectRate}
-                  onChange={(e) => setNewProjectRate(e.target.value)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600"
-                />
+              {/* Botones de acción */}
+              <div className="flex gap-4">
                 <button
-                  onClick={addProject}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700"
+                  onClick={exportToCSV}
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition"
                 >
-                  +
+                  📥 Exportar CSV
                 </button>
               </div>
             </div>
+          )}
 
-            {/* Projects List */}
-            <div className="space-y-2">
-              {projects.map((p) => (
-                <div key={p.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-900">{p.name}</p>
-                    <p className="text-sm text-gray-600">€{p.hourly_rate}/hora</p>
+          {/* PROJECTS TAB */}
+          {activeTab === 'projects' && (
+            <div className="space-y-8">
+              {/* Nuevo proyecto */}
+              {showNewProject && (
+                <div className="bg-white p-8 rounded-xl shadow-sm border border-blue-200">
+                  <h3 className="font-bold text-lg mb-6">Nuevo proyecto</h3>
+                  <div className="space-y-4">
+                    <input
+                      type="text"
+                      placeholder="Nombre del proyecto"
+                      value={newProjectName}
+                      onChange={(e) => setNewProjectName(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Tarifa €/hora"
+                      value={newProjectRate}
+                      onChange={(e) => setNewProjectRate(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600"
+                    />
+                    <div className="flex gap-3">
+                      <button
+                        onClick={addProject}
+                        className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+                      >
+                        Crear
+                      </button>
+                      <button
+                        onClick={() => setShowNewProject(false)}
+                        className="px-6 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-600">
-                    {thisWeekSessions
-                      .filter((s) => s.project_id === p.id)
-                      .reduce((sum, s) => sum + s.duration_seconds / 3600, 0)
-                      .toFixed(1)}
-                    h esta semana
-                  </p>
                 </div>
-              ))}
-            </div>
-          </div>
+              )}
 
-          {/* CTA for Premium */}
-          <div className="mt-8 bg-blue-600 text-white rounded-lg p-8 text-center">
-            <h3 className="text-2xl font-bold mb-2">Versión Premium disponible</h3>
-            <p className="mb-4">Múltiples proyectos, histórico completo, exportar datos</p>
-            <button className="bg-white text-blue-600 px-6 py-2 rounded-lg font-bold hover:bg-gray-100">
-              Ver planes
-            </button>
-          </div>
-        </div>
+              {!showNewProject && (
+                <button
+                  onClick={() => setShowNewProject(true)}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition"
+                >
+                  + Nuevo proyecto
+                </button>
+              )}
+
+              {/* Listado de proyectos */}
+              <div className="grid md:grid-cols-2 gap-6">
+                {projects.filter(p => !p.archived).map(project => {
+                  const projectSessions = sessions.filter(s => s.project_id === project.id);
+                  const hours = projectSessions.reduce((sum, s) => sum + (s.end_time - s.start_time) / 3600, 0);
+                  const earnings = hours * project.rate;
+
+                  return (
+                    <div key={project.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h3 className="font-bold text-lg text-gray-900">{project.name}</h3>
+                          <p className="text-gray-600">€{project.rate}/h</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => archiveProject(project.id)}
+                            className="px-3 py-1 text-sm bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 transition"
+                          >
+                            Pausar
+                          </button>
+                          <button
+                            onClick={() => deleteProject(project.id)}
+                            className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 transition"
+                          >
+                            Borrar
+                          </button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-gray-600">
+                          <strong>Horas:</strong> {hours.toFixed(2)}h
+                        </p>
+                        <p className="text-gray-600">
+                          <strong>Ingresos:</strong> <span className="text-green-600 font-semibold">€{earnings.toFixed(2)}</span>
+                        </p>
+                        <p className="text-gray-600">
+                          <strong>Sesiones:</strong> {projectSessions.length}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {projects.filter(p => p.archived).length > 0 && (
+                <div>
+                  <h3 className="font-bold text-lg text-gray-900 mb-4">Proyectos archivados</h3>
+                  <div className="grid md:grid-cols-2 gap-6">
+                    {projects.filter(p => p.archived).map(project => (
+                      <div key={project.id} className="bg-gray-50 p-6 rounded-xl border border-gray-200 opacity-60">
+                        <p className="font-semibold text-gray-600">{project.name}</p>
+                        <p className="text-sm text-gray-500">Archivado</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* SESSIONS TAB */}
+          {activeTab === 'sessions' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Proyecto</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Inicio</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Duración</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Tarifa</th>
+                      <th className="px-6 py-3 text-right text-sm font-semibold text-gray-900">Ingresos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessions.map((session) => {
+                      const project = projects.find(p => p.id === session.project_id);
+                      const duration = (session.end_time - session.start_time) / 3600;
+                      const earnings = duration * (project?.rate || 0);
+                      return (
+                        <tr key={session.id} className="border-b border-gray-200 hover:bg-gray-50">
+                          <td className="px-6 py-4 text-sm text-gray-900">{project?.name || 'N/A'}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">
+                            {new Date(session.created_at).toLocaleString('es-ES')}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900 font-semibold">{duration.toFixed(2)}h</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">€{project?.rate || 0}/h</td>
+                          <td className="px-6 py-4 text-right text-sm font-semibold text-green-600">€{earnings.toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </main>
       </div>
     </>
   );
