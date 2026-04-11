@@ -7,7 +7,7 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Timely - Sabe cuánto ganas por hora</title>
+        <title>Timely - Sabes cuánto ganas por hora</title>
         <meta name="description" content="Track tus horas, calcula tus ingresos reales. Para freelancers que quieren saber de verdad cuánto ganan." />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
