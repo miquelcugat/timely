@@ -39,7 +39,7 @@ export default function Home() {
             </div>
             
             <h1 className="text-6xl md:text-7xl font-black text-gray-900 mb-6 leading-tight">
-              Sabe cuánto ganas<br />
+              Sabes cuánto ganas<br />
               <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">de verdad</span>
             </h1>
             
