@@ -20,11 +20,9 @@
     "react-dom": "^18.2.0",
     "recharts": "^3.8.1",
     "stripe": "^22.0.1",
-    "recharts": "^2.12.7",
    "jspdf": "^2.5.1",
    "html2canvas": "^1.4.1",
-    "micro": "^10.0.1",
-   "stripe": "^14.0.0"
+    "micro": "^10.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.8.0",
