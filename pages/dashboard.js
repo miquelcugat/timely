@@ -181,12 +181,16 @@ export default function Dashboard() {
     }
 
     try {
+      const project = projects.find((p) => p.id === activeProject);
+      const earned = (duration / 3600) * (project?.rate || 0);
       const { error } = await supabase.from('sessions').insert([
         {
           user_id: user.id,
           project_id: activeProject,
-          start_time: startedAt,
-          end_time: endedAt,
+          duration_seconds: duration,
+          earned: Number(earned.toFixed(2)),
+          start_time: new Date(startedAt * 1000).toISOString(),
+          end_time: new Date(endedAt * 1000).toISOString(),
         },
       ]);
       if (error) throw error;
@@ -327,13 +331,11 @@ export default function Dashboard() {
   startOfWeek.setDate(startOfToday.getDate() - ((startOfToday.getDay() + 6) % 7)); // Monday
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const sessionDuration = (s) => Math.max(0, (s.end_time - s.start_time) / 3600);
-  const sessionEarnings = (s) => {
-    const project = projects.find((p) => p.id === s.project_id);
-    return sessionDuration(s) * (project?.rate || 0);
-  };
+  // duration in HOURS for stat calculations
+  const sessionDuration = (s) => Math.max(0, (s.duration_seconds || 0) / 3600);
+  const sessionEarnings = (s) => Number(s.earned || 0);
 
-  const inRange = (s, from) => new Date(s.created_at) >= from;
+  const inRange = (s, from) => new Date(s.start_time || s.created_at) >= from;
 
   const todayHours = sessions.filter((s) => inRange(s, startOfToday)).reduce((a, s) => a + sessionDuration(s), 0);
   const todayEarnings = sessions.filter((s) => inRange(s, startOfToday)).reduce((a, s) => a + sessionEarnings(s), 0);
@@ -678,7 +680,7 @@ export default function Dashboard() {
                         <p className="font-semibold text-slate-900 truncate">
                           {project?.name || 'Proyecto borrado'}
                         </p>
-                        <p className="text-xs text-slate-500 mt-0.5">{formatDate(s.created_at)}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{formatDate(s.start_time || s.created_at)}</p>
                       </div>
                       <div className="flex items-center gap-4 tabular-nums">
                         <span className="text-sm font-semibold text-slate-700">{formatTime(duration * 3600)}</span>
