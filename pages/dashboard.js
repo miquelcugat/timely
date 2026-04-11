@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { supabase } from '../lib/supabaseClient';
+import { usePlan } from '../lib/usePlan';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -13,10 +14,13 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [activeProject, setActiveProject] = useState('');
 
+  // Plan
+  const { plan, limits, isPro, loading: planLoading } = usePlan(user?.id);
+
   // Timer
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
-  const startedAtRef = useRef(null); // epoch seconds when current run started
+  const startedAtRef = useRef(null);
 
   // Forms
   const [newProjectName, setNewProjectName] = useState('');
@@ -29,10 +33,17 @@ export default function Dashboard() {
   const [editRate, setEditRate] = useState('');
 
   // Confirm delete
-  const [confirmDelete, setConfirmDelete] = useState(null); // { type: 'project'|'session', id, label }
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   // Toast
-  const [toast, setToast] = useState(null); // { type: 'success'|'error', msg }
+  const [toast, setToast] = useState(null);
+
+  // Upgrade modal
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState('');
+
+  // Stripe loading
+  const [opening, setOpening] = useState(false);
 
   // ---------- Helpers ----------
   const showToast = useCallback((type, msg) => {
@@ -72,7 +83,6 @@ export default function Dashboard() {
       setUser(data.session.user);
       await loadData(data.session.user.id);
 
-      // Restore in-progress timer if any
       try {
         const saved = JSON.parse(localStorage.getItem('timely_timer') || 'null');
         if (saved?.startedAt && saved?.projectId) {
@@ -89,6 +99,15 @@ export default function Dashboard() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Detect ?upgraded=true after returning from Stripe
+  useEffect(() => {
+    if (router.query.upgraded === 'true') {
+      showToast('success', '¡Bienvenido a Pro! 🎉');
+      // Clean the URL
+      router.replace('/dashboard', undefined, { shallow: true });
+    }
+  }, [router.query.upgraded, router, showToast]);
 
   const loadData = async (userId) => {
     try {
@@ -112,7 +131,6 @@ export default function Dashboard() {
       setProjects(projectsData || []);
       setSessions(sessionsData || []);
 
-      // Keep the active project if still valid; otherwise pick the first one
       setActiveProject((prev) => {
         if (prev && (projectsData || []).some((p) => p.id === prev)) return prev;
         return projectsData?.[0]?.id || '';
@@ -136,7 +154,6 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [isRunning]);
 
-  // Warn before closing if timer is running
   useEffect(() => {
     const handler = (e) => {
       if (isRunning) {
@@ -147,6 +164,64 @@ export default function Dashboard() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [isRunning]);
+
+  // ---------- Stripe actions ----------
+  const openCheckout = async () => {
+    setOpening(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        showToast('error', 'Sesión expirada');
+        return;
+      }
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+      const json = await res.json();
+      if (json.url) {
+        window.location.href = json.url;
+      } else {
+        showToast('error', json.error || 'Error abriendo el checkout');
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('error', 'Error abriendo el checkout');
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  const openPortal = async () => {
+    setOpening(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const res = await fetch('/api/stripe/portal', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+      const json = await res.json();
+      if (json.url) {
+        window.location.href = json.url;
+      } else {
+        showToast('error', json.error || 'Error abriendo el portal');
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('error', 'Error abriendo el portal');
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  const triggerUpgrade = (reason) => {
+    setUpgradeReason(reason);
+    setShowUpgradeModal(true);
+  };
 
   // ---------- Timer actions ----------
   const startSession = () => {
@@ -224,6 +299,14 @@ export default function Dashboard() {
       return;
     }
 
+    // Plan limit check
+    if (!isPro && projects.length >= limits.maxProjects) {
+      triggerUpgrade(
+        `Has alcanzado el límite de ${limits.maxProjects} proyectos del plan Free.`
+      );
+      return;
+    }
+
     setSavingProject(true);
     try {
       const { data, error } = await supabase
@@ -235,14 +318,12 @@ export default function Dashboard() {
 
       const created = data?.[0];
       if (created) {
-        // Update local state immediately so it appears in the selector
         setProjects((prev) => [created, ...prev]);
         setActiveProject(created.id);
       }
       setNewProjectName('');
       setNewProjectRate('');
       showToast('success', 'Proyecto creado');
-      // Re-sync from DB in the background
       loadData(user.id);
     } catch (error) {
       console.error('Error adding project:', error);
@@ -290,7 +371,6 @@ export default function Dashboard() {
 
   const deleteProject = async (id) => {
     try {
-      // Delete sessions of this project first (in case no FK cascade)
       await supabase.from('sessions').delete().eq('project_id', id);
       const { error } = await supabase.from('projects').delete().eq('id', id);
       if (error) throw error;
@@ -328,10 +408,9 @@ export default function Dashboard() {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startOfWeek = new Date(startOfToday);
-  startOfWeek.setDate(startOfToday.getDate() - ((startOfToday.getDay() + 6) % 7)); // Monday
+  startOfWeek.setDate(startOfToday.getDate() - ((startOfToday.getDay() + 6) % 7));
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  // duration in HOURS for stat calculations
   const sessionDuration = (s) => Math.max(0, (s.duration_seconds || 0) / 3600);
   const sessionEarnings = (s) => Number(s.earned || 0);
 
@@ -353,8 +432,12 @@ export default function Dashboard() {
 
   const recentSessions = sessions.slice(0, 8);
 
+  // Project limit info
+  const atProjectLimit = !isPro && projects.length >= limits.maxProjects;
+  const projectsRemaining = isPro ? Infinity : Math.max(0, limits.maxProjects - projects.length);
+
   // ---------- Loading ----------
-  if (loading) {
+  if (loading || planLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex items-center gap-3 text-slate-600">
@@ -381,10 +464,19 @@ export default function Dashboard() {
               <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-sm">
                 <span className="text-white font-bold text-lg">⏱</span>
               </div>
-              <div>
+              <div className="flex items-center gap-2">
                 <span className="font-bold text-xl text-slate-900">Timely</span>
+                <span
+                  className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                    isPro
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {isPro ? 'PRO' : 'FREE'}
+                </span>
                 {isRunning && (
-                  <span className="ml-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                  <span className="ml-2 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                     EN CURSO
                   </span>
@@ -398,13 +490,19 @@ export default function Dashboard() {
               >
                 Mis proyectos
               </button>
-              <span className="text-sm text-slate-600 hidden sm:inline">{user?.email}</span>
+              <button
+                onClick={() => router.push('/account')}
+                className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
+              >
+                Mi cuenta
+              </button>
+              <span className="text-sm text-slate-600 hidden md:inline">{user?.email}</span>
               <button
                 onClick={async () => {
                   await supabase.auth.signOut();
                   router.push('/');
                 }}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
+                className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
               >
                 Salir
               </button>
@@ -431,7 +529,6 @@ export default function Dashboard() {
 
           {/* Timer + sidebar */}
           <div className="grid lg:grid-cols-3 gap-6 mb-8">
-            {/* Timer */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 shadow-sm">
                 <div className="text-center">
@@ -547,40 +644,64 @@ export default function Dashboard() {
 
           {/* Projects management */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-8">
-            <div className="p-6 sm:p-8 border-b border-slate-100">
-              <h2 className="text-xl font-bold text-slate-900 mb-1">Tus proyectos</h2>
-              <p className="text-sm text-slate-500">Crea, edita y borra los proyectos que facturas.</p>
+            <div className="p-6 sm:p-8 border-b border-slate-100 flex justify-between items-start gap-4 flex-wrap">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900 mb-1">Tus proyectos</h2>
+                <p className="text-sm text-slate-500">Crea, edita y borra los proyectos que facturas.</p>
+              </div>
+              {!isPro && (
+                <div className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full">
+                  {projects.length}/{limits.maxProjects} proyectos · Plan Free
+                </div>
+              )}
             </div>
 
             {/* Add form */}
             <div className="p-6 sm:p-8 border-b border-slate-100 bg-slate-50/50">
-              <div className="grid sm:grid-cols-[1fr_180px_auto] gap-3">
-                <input
-                  type="text"
-                  placeholder="Nombre del proyecto"
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addProject()}
-                  className="px-4 py-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition"
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="Tarifa €/hora"
-                  value={newProjectRate}
-                  onChange={(e) => setNewProjectRate(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addProject()}
-                  className="px-4 py-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition tabular-nums"
-                />
-                <button
-                  onClick={addProject}
-                  disabled={savingProject}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 active:scale-[0.99] transition disabled:opacity-60 whitespace-nowrap"
-                >
-                  {savingProject ? 'Creando…' : '+ Añadir'}
-                </button>
-              </div>
+              {atProjectLimit ? (
+                <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-xl p-6 text-center">
+                  <p className="font-bold text-lg mb-1">
+                    Has alcanzado el límite del plan Free
+                  </p>
+                  <p className="text-sm text-blue-100 mb-4">
+                    Pasa a Pro para tener proyectos ilimitados, exportar a PDF y mucho más.
+                  </p>
+                  <button
+                    onClick={() => triggerUpgrade('Necesitas Pro para crear más proyectos.')}
+                    className="bg-white text-blue-700 px-6 py-2.5 rounded-lg font-bold hover:bg-blue-50 transition"
+                  >
+                    Upgrade a Pro · 14,99 €/mes
+                  </button>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-[1fr_180px_auto] gap-3">
+                  <input
+                    type="text"
+                    placeholder="Nombre del proyecto"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addProject()}
+                    className="px-4 py-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Tarifa €/hora"
+                    value={newProjectRate}
+                    onChange={(e) => setNewProjectRate(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addProject()}
+                    className="px-4 py-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition tabular-nums"
+                  />
+                  <button
+                    onClick={addProject}
+                    disabled={savingProject}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 active:scale-[0.99] transition disabled:opacity-60 whitespace-nowrap"
+                  >
+                    {savingProject ? 'Creando…' : '+ Añadir'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Project list */}
@@ -713,22 +834,40 @@ export default function Dashboard() {
           )}
 
           {/* CTA */}
-          <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl p-8 text-center shadow-sm">
-            <h3 className="text-2xl font-bold mb-2">Upgrade a Pro</h3>
-            <p className="mb-5 text-blue-100">€14.99/mes · Proyectos ilimitados, histórico completo, exportar a CSV</p>
-            <button
-              onClick={() => router.push('/pricing')}
-              className="bg-white text-blue-700 px-8 py-3 rounded-lg font-bold hover:bg-blue-50 active:scale-[0.99] transition"
-            >
-              Ver planes
-            </button>
-          </div>
+          {isPro ? (
+            <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
+              <div className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold mb-3">
+                PRO ACTIVO
+              </div>
+              <h3 className="text-2xl font-bold text-slate-900 mb-2">Eres miembro Pro</h3>
+              <p className="mb-5 text-slate-600">Gracias por confiar en Timely. Gestiona tu suscripción cuando quieras.</p>
+              <button
+                onClick={openPortal}
+                disabled={opening}
+                className="bg-slate-100 text-slate-700 px-8 py-3 rounded-lg font-bold hover:bg-slate-200 active:scale-[0.99] transition disabled:opacity-60"
+              >
+                {opening ? 'Abriendo…' : 'Gestionar suscripción'}
+              </button>
+            </div>
+          ) : (
+            <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl p-8 text-center shadow-sm">
+              <h3 className="text-2xl font-bold mb-2">Upgrade a Pro</h3>
+              <p className="mb-5 text-blue-100">14,99 €/mes · Proyectos ilimitados, exportar a PDF, histórico completo</p>
+              <button
+                onClick={openCheckout}
+                disabled={opening}
+                className="bg-white text-blue-700 px-8 py-3 rounded-lg font-bold hover:bg-blue-50 active:scale-[0.99] transition disabled:opacity-60"
+              >
+                {opening ? 'Abriendo Stripe…' : 'Empezar ahora'}
+              </button>
+            </div>
+          )}
         </main>
 
         {/* Toast */}
         {toast && (
           <div
-            className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-lg shadow-lg font-semibold text-sm animate-in fade-in slide-in-from-bottom-2 ${
+            className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-lg shadow-lg font-semibold text-sm ${
               toast.type === 'success'
                 ? 'bg-emerald-600 text-white'
                 : 'bg-red-600 text-white'
@@ -738,7 +877,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Confirm modal */}
+        {/* Confirm delete modal */}
         {confirmDelete && (
           <div
             className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
@@ -768,6 +907,71 @@ export default function Dashboard() {
                   className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition"
                 >
                   Borrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Upgrade modal */}
+        {showUpgradeModal && (
+          <div
+            className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setShowUpgradeModal(false)}
+          >
+            <div
+              className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full mb-4">
+                  <span className="text-3xl">✨</span>
+                </div>
+                <h3 className="font-bold text-2xl text-slate-900 mb-2">
+                  Upgrade a Pro
+                </h3>
+                <p className="text-sm text-slate-600">{upgradeReason}</p>
+              </div>
+
+              <ul className="space-y-2 mb-6 text-sm">
+                <li className="flex items-center gap-2 text-slate-700">
+                  <span className="text-emerald-600 font-bold">✓</span>
+                  Proyectos ilimitados
+                </li>
+                <li className="flex items-center gap-2 text-slate-700">
+                  <span className="text-emerald-600 font-bold">✓</span>
+                  Exportar a PDF con gráficos
+                </li>
+                <li className="flex items-center gap-2 text-slate-700">
+                  <span className="text-emerald-600 font-bold">✓</span>
+                  Histórico completo sin límites
+                </li>
+                <li className="flex items-center gap-2 text-slate-700">
+                  <span className="text-emerald-600 font-bold">✓</span>
+                  Soporte prioritario
+                </li>
+              </ul>
+
+              <div className="text-center mb-4">
+                <p className="text-3xl font-bold text-slate-900">14,99 €<span className="text-base font-normal text-slate-500">/mes</span></p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowUpgradeModal(false)}
+                  className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-lg font-semibold hover:bg-slate-200 transition"
+                >
+                  Ahora no
+                </button>
+                <button
+                  onClick={() => {
+                    setShowUpgradeModal(false);
+                    openCheckout();
+                  }}
+                  disabled={opening}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition disabled:opacity-60"
+                >
+                  {opening ? 'Abriendo…' : 'Upgrade'}
                 </button>
               </div>
             </div>
