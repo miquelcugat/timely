@@ -494,6 +494,12 @@ export default function Dashboard() {
                 onClick={() => router.push('/account')}
                 className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
               >
+                   Mis clientes
+</button>
+<button
+  onClick={() => router.push('/account')}
+  className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
+>
                 Mi cuenta
               </button>
               <span className="text-sm text-slate-600 hidden md:inline">{user?.email}</span>
