@@ -21,8 +21,13 @@ export default function Projects() {
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Selection mode: 'project' or 'client'
+  const [mode, setMode] = useState('project');
   const [selectedId, setSelectedId] = useState('');
+
   const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -79,24 +84,34 @@ export default function Projects() {
 
   const loadData = async (userId) => {
     try {
-      const [{ data: projectsData, error: pErr }, { data: sessionsData, error: sErr }] =
-        await Promise.all([
-          supabase
-            .from('projects')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('sessions')
-            .select('*')
-            .eq('user_id', userId)
-            .order('start_time', { ascending: false, nullsFirst: false }),
-        ]);
+      const [
+        { data: projectsData, error: pErr },
+        { data: sessionsData, error: sErr },
+        { data: clientsData, error: cErr },
+      ] = await Promise.all([
+        supabase
+          .from('projects')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('sessions')
+          .select('*')
+          .eq('user_id', userId)
+          .order('start_time', { ascending: false, nullsFirst: false }),
+        supabase
+          .from('clients')
+          .select('*')
+          .eq('user_id', userId)
+          .order('name', { ascending: true }),
+      ]);
       if (pErr) throw pErr;
       if (sErr) throw sErr;
+      if (cErr) throw cErr;
 
       setProjects(projectsData || []);
       setSessions(sessionsData || []);
+      setClients(clientsData || []);
 
       // Pre-select project from URL ?id=... or first project
       const fromQuery = router.query.id;
@@ -113,12 +128,43 @@ export default function Projects() {
     }
   };
 
-  // ---------- Computed data for selected project ----------
-  const selectedProject = projects.find((p) => p.id === selectedId);
-  const projectSessions = useMemo(
-    () => sessions.filter((s) => s.project_id === selectedId),
-    [sessions, selectedId]
-  );
+  // Reset selection when mode changes
+  useEffect(() => {
+    if (mode === 'project') {
+      setSelectedId(projects[0]?.id || '');
+    } else if (mode === 'client') {
+      const clientsWithProjects = clients.filter((c) =>
+        projects.some((p) => p.client_id === c.id)
+      );
+      setSelectedId(clientsWithProjects[0]?.id || '');
+    }
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---------- Computed: which sessions to analyze? ----------
+  const selectedProject = mode === 'project' ? projects.find((p) => p.id === selectedId) : null;
+  const selectedClient = mode === 'client' ? clients.find((c) => c.id === selectedId) : null;
+  const projectClient =
+    selectedProject && selectedProject.client_id
+      ? clients.find((c) => c.id === selectedProject.client_id)
+      : null;
+
+  // Sessions to analyze: depends on mode
+  const analysisSessions = useMemo(() => {
+    if (mode === 'project') {
+      return sessions.filter((s) => s.project_id === selectedId);
+    } else {
+      // Client mode: all sessions of all projects of this client
+      const clientProjectIds = projects
+        .filter((p) => p.client_id === selectedId)
+        .map((p) => p.id);
+      return sessions.filter((s) => clientProjectIds.includes(s.project_id));
+    }
+  }, [mode, selectedId, sessions, projects]);
+
+  const clientProjects = useMemo(() => {
+    if (mode !== 'client') return [];
+    return projects.filter((p) => p.client_id === selectedId);
+  }, [mode, selectedId, projects]);
 
   const sessionDate = (s) => new Date(s.start_time || s.created_at);
   const sessionHours = (s) => Math.max(0, (s.duration_seconds || 0) / 3600);
@@ -126,17 +172,14 @@ export default function Projects() {
 
   // Totals
   const stats = useMemo(() => {
-    const totalHours = projectSessions.reduce((a, s) => a + sessionHours(s), 0);
-    const totalEarnings = projectSessions.reduce((a, s) => a + sessionEarnings(s), 0);
-    const sessionCount = projectSessions.length;
-    const avgSessionMin =
-      sessionCount > 0 ? (totalHours * 60) / sessionCount : 0;
-    const avgEarningsPerSession =
-      sessionCount > 0 ? totalEarnings / sessionCount : 0;
+    const totalHours = analysisSessions.reduce((a, s) => a + sessionHours(s), 0);
+    const totalEarnings = analysisSessions.reduce((a, s) => a + sessionEarnings(s), 0);
+    const sessionCount = analysisSessions.length;
+    const avgSessionMin = sessionCount > 0 ? (totalHours * 60) / sessionCount : 0;
+    const avgEarningsPerSession = sessionCount > 0 ? totalEarnings / sessionCount : 0;
     const effectiveRate = totalHours > 0 ? totalEarnings / totalHours : 0;
 
-    // First and last session
-    const sortedByDate = [...projectSessions].sort(
+    const sortedByDate = [...analysisSessions].sort(
       (a, b) => sessionDate(a) - sessionDate(b)
     );
     const firstSession = sortedByDate[0];
@@ -152,7 +195,7 @@ export default function Projects() {
       firstSession,
       lastSession,
     };
-  }, [projectSessions]);
+  }, [analysisSessions]);
 
   // Daily data — last 30 days
   const dailyData = useMemo(() => {
@@ -164,7 +207,7 @@ export default function Projects() {
       d.setDate(today.getDate() - i);
       days.push({ date: d, hours: 0, earnings: 0 });
     }
-    projectSessions.forEach((s) => {
+    analysisSessions.forEach((s) => {
       const d = sessionDate(s);
       d.setHours(0, 0, 0, 0);
       const diffDays = Math.floor((today - d) / 86400000);
@@ -179,14 +222,13 @@ export default function Projects() {
       hours: Number(d.hours.toFixed(2)),
       earnings: Number(d.earnings.toFixed(2)),
     }));
-  }, [projectSessions]);
+  }, [analysisSessions]);
 
   // Weekly data — last 12 weeks
   const weeklyData = useMemo(() => {
     const weeks = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    // Find Monday of current week
     const dayOfWeek = (today.getDay() + 6) % 7;
     const monday = new Date(today);
     monday.setDate(today.getDate() - dayOfWeek);
@@ -198,7 +240,7 @@ export default function Projects() {
       end.setDate(start.getDate() + 7);
       weeks.push({ start, end, hours: 0, earnings: 0 });
     }
-    projectSessions.forEach((s) => {
+    analysisSessions.forEach((s) => {
       const d = sessionDate(s);
       weeks.forEach((w) => {
         if (d >= w.start && d < w.end) {
@@ -212,16 +254,16 @@ export default function Projects() {
       hours: Number(w.hours.toFixed(2)),
       earnings: Number(w.earnings.toFixed(2)),
     }));
-  }, [projectSessions]);
+  }, [analysisSessions]);
 
-  // Hourly distribution — 0..23
+  // Hourly distribution
   const hourlyData = useMemo(() => {
     const hours = Array.from({ length: 24 }, (_, h) => ({
       hour: `${String(h).padStart(2, '0')}h`,
       sessions: 0,
       hoursWorked: 0,
     }));
-    projectSessions.forEach((s) => {
+    analysisSessions.forEach((s) => {
       const d = sessionDate(s);
       const h = d.getHours();
       hours[h].sessions += 1;
@@ -231,26 +273,59 @@ export default function Projects() {
       ...h,
       hoursWorked: Number(h.hoursWorked.toFixed(2)),
     }));
-  }, [projectSessions]);
+  }, [analysisSessions]);
+
+  // Display title for the analysis
+  const analysisTitle =
+    mode === 'project' ? selectedProject?.name : selectedClient?.name;
+  const analysisSubtitle =
+    mode === 'project'
+      ? selectedProject
+        ? `€${selectedProject.rate}/h${projectClient ? ` · Cliente: ${projectClient.name}` : ''}`
+        : ''
+      : selectedClient
+      ? `${clientProjects.length} ${clientProjects.length === 1 ? 'proyecto' : 'proyectos'} de este cliente`
+      : '';
 
   // ---------- Exports ----------
   const exportCSV = () => {
-    if (!selectedProject) return;
+    if (!analysisTitle) return;
+
+    const headerInfo =
+      mode === 'project'
+        ? [
+            ['Proyecto', selectedProject.name],
+            ['Cliente', projectClient?.name || '—'],
+            ['NIF cliente', projectClient?.tax_id || '—'],
+            ['Tarifa €/h', selectedProject.rate],
+          ]
+        : [
+            ['Cliente', selectedClient.name],
+            ['NIF cliente', selectedClient.tax_id || '—'],
+            ['Email cliente', selectedClient.email || '—'],
+            ['Proyectos incluidos', clientProjects.map((p) => p.name).join('; ')],
+          ];
+
     const rows = [
-      ['Proyecto', selectedProject.name],
-      ['Tarifa €/h', selectedProject.rate],
+      ...headerInfo,
       ['Total horas', stats.totalHours.toFixed(2)],
       ['Total ganado €', stats.totalEarnings.toFixed(2)],
       ['Sesiones', stats.sessionCount],
       [],
-      ['Fecha inicio', 'Fecha fin', 'Duración (h)', 'Ganado (€)', 'Notas'],
-      ...projectSessions.map((s) => [
-        s.start_time ? new Date(s.start_time).toISOString() : '',
-        s.end_time ? new Date(s.end_time).toISOString() : '',
-        sessionHours(s).toFixed(2),
-        sessionEarnings(s).toFixed(2),
-        (s.notes || '').replace(/[\r\n,;]+/g, ' '),
-      ]),
+      ['Fecha inicio', 'Fecha fin', 'Proyecto', 'Cliente', 'Duración (h)', 'Ganado (€)', 'Notas'],
+      ...analysisSessions.map((s) => {
+        const proj = projects.find((p) => p.id === s.project_id);
+        const cli = proj?.client_id ? clients.find((c) => c.id === proj.client_id) : null;
+        return [
+          s.start_time ? new Date(s.start_time).toISOString() : '',
+          s.end_time ? new Date(s.end_time).toISOString() : '',
+          proj?.name || '',
+          cli?.name || '',
+          sessionHours(s).toFixed(2),
+          sessionEarnings(s).toFixed(2),
+          (s.notes || '').replace(/[\r\n,;]+/g, ' '),
+        ];
+      }),
     ];
 
     const csv = rows
@@ -268,7 +343,7 @@ export default function Projects() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `timely_${selectedProject.name.replace(/[^a-z0-9]/gi, '_')}_${
+    a.download = `timely_${analysisTitle.replace(/[^a-z0-9]/gi, '_')}_${
       new Date().toISOString().split('T')[0]
     }.csv`;
     document.body.appendChild(a);
@@ -279,7 +354,7 @@ export default function Projects() {
   };
 
   const exportPDF = async () => {
-    if (!selectedProject) return;
+    if (!analysisTitle) return;
     if (!isPro) {
       setShowUpgradeModal(true);
       return;
@@ -302,23 +377,53 @@ export default function Projects() {
       pdf.setTextColor(255, 255, 255);
       pdf.setFontSize(18);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('Timely · Informe de proyecto', margin, 16);
+      pdf.text(
+        mode === 'project' ? 'Timely · Informe de proyecto' : 'Timely · Informe de cliente',
+        margin,
+        16
+      );
       y = 35;
 
       // Title
       pdf.setTextColor(15, 23, 42);
       pdf.setFontSize(22);
-      pdf.text(selectedProject.name, margin, y);
+      pdf.text(analysisTitle, margin, y);
       y += 7;
       pdf.setFontSize(10);
       pdf.setFont('helvetica', 'normal');
       pdf.setTextColor(100, 116, 139);
       pdf.text(
-        `Generado el ${new Date().toLocaleDateString('es-ES')} · Tarifa: €${selectedProject.rate}/h`,
+        `Generado el ${new Date().toLocaleDateString('es-ES')}`,
         margin,
         y
       );
-      y += 10;
+      y += 8;
+
+      // Client info block (if applicable)
+      const clientForBlock = mode === 'project' ? projectClient : selectedClient;
+      if (clientForBlock) {
+        pdf.setDrawColor(226, 232, 240);
+        pdf.setFillColor(248, 250, 252);
+        const blockHeight = 26;
+        pdf.roundedRect(margin, y, pageWidth - margin * 2, blockHeight, 3, 3, 'FD');
+        pdf.setTextColor(100, 116, 139);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('CLIENTE', margin + 5, y + 7);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(11);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(clientForBlock.name, margin + 5, y + 14);
+        pdf.setFontSize(9);
+        pdf.setTextColor(71, 85, 105);
+        const details = [
+          clientForBlock.tax_id ? `NIF: ${clientForBlock.tax_id}` : null,
+          clientForBlock.email,
+          [clientForBlock.city, clientForBlock.country].filter(Boolean).join(', '),
+        ].filter(Boolean).join('  ·  ');
+        pdf.text(details, margin + 5, y + 21);
+        y += blockHeight + 5;
+      }
 
       // Stats box
       pdf.setDrawColor(226, 232, 240);
@@ -346,7 +451,7 @@ export default function Projects() {
       });
       y += 45;
 
-      // Charts — capture each ref
+      // Charts
       const chartsToCapture = [
         { ref: dailyChartRef, title: 'Horas por día (últimos 30 días)' },
         { ref: weeklyChartRef, title: 'Ingresos por semana (últimas 12 semanas)' },
@@ -376,7 +481,7 @@ export default function Projects() {
         y += imgHeight + 10;
       }
 
-      // Sessions table — new page
+      // Sessions table
       pdf.addPage();
       y = margin;
       pdf.setFontSize(14);
@@ -390,12 +495,15 @@ export default function Projects() {
       pdf.rect(margin, y, pageWidth - margin * 2, 7, 'F');
       pdf.setFont('helvetica', 'bold');
       pdf.text('Fecha', margin + 2, y + 5);
-      pdf.text('Duración', margin + 70, y + 5);
-      pdf.text('Ganado', margin + 110, y + 5);
+      if (mode === 'client') {
+        pdf.text('Proyecto', margin + 40, y + 5);
+      }
+      pdf.text('Duración', margin + 110, y + 5);
+      pdf.text('Ganado', margin + 145, y + 5);
       y += 9;
 
       pdf.setFont('helvetica', 'normal');
-      const sortedSessions = [...projectSessions].sort(
+      const sortedSessions = [...analysisSessions].sort(
         (a, b) => sessionDate(b) - sessionDate(a)
       );
       for (const s of sortedSessions) {
@@ -407,13 +515,18 @@ export default function Projects() {
         const hours = sessionHours(s);
         const dur = `${Math.floor(hours)}h ${Math.round((hours % 1) * 60)}min`;
         pdf.text(dateStr, margin + 2, y);
-        pdf.text(dur, margin + 70, y);
-        pdf.text(formatEUR(sessionEarnings(s)), margin + 110, y);
+        if (mode === 'client') {
+          const proj = projects.find((p) => p.id === s.project_id);
+          const projName = (proj?.name || '').substring(0, 25);
+          pdf.text(projName, margin + 40, y);
+        }
+        pdf.text(dur, margin + 110, y);
+        pdf.text(formatEUR(sessionEarnings(s)), margin + 145, y);
         y += 5;
       }
 
       pdf.save(
-        `timely_${selectedProject.name.replace(/[^a-z0-9]/gi, '_')}_${
+        `timely_${analysisTitle.replace(/[^a-z0-9]/gi, '_')}_${
           new Date().toISOString().split('T')[0]
         }.pdf`
       );
@@ -437,6 +550,11 @@ export default function Projects() {
       </div>
     );
   }
+
+  // Clients that have at least one project
+  const clientsWithProjects = clients.filter((c) =>
+    projects.some((p) => p.client_id === c.id)
+  );
 
   // ---------- Render ----------
   return (
@@ -468,6 +586,12 @@ export default function Projects() {
               >
                 Mis proyectos
               </Link>
+              <Link
+                href="/clients"
+                className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
+              >
+                Mis clientes
+              </Link>
               <button
                 onClick={async () => {
                   await supabase.auth.signOut();
@@ -485,7 +609,7 @@ export default function Projects() {
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-slate-900">Mis proyectos</h1>
             <p className="text-slate-500 mt-1">
-              Análisis detallado, estadísticas y exportación de cada proyecto.
+              Análisis detallado, estadísticas y exportación de cada proyecto o cliente.
             </p>
           </div>
 
@@ -501,35 +625,80 @@ export default function Projects() {
             </div>
           ) : (
             <>
-              {/* Project selector + actions */}
+              {/* Mode + Selector + Actions */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
+                {/* Mode tabs */}
+                <div className="flex gap-2 mb-5 border-b border-slate-100">
+                  <button
+                    onClick={() => setMode('project')}
+                    className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition ${
+                      mode === 'project'
+                        ? 'border-blue-600 text-blue-700'
+                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Por proyecto
+                  </button>
+                  <button
+                    onClick={() => setMode('client')}
+                    disabled={clientsWithProjects.length === 0}
+                    className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition ${
+                      mode === 'client'
+                        ? 'border-blue-600 text-blue-700'
+                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                    } disabled:opacity-40 disabled:cursor-not-allowed`}
+                    title={
+                      clientsWithProjects.length === 0
+                        ? 'Asigna clientes a tus proyectos primero'
+                        : ''
+                    }
+                  >
+                    Por cliente
+                  </button>
+                </div>
+
                 <div className="grid lg:grid-cols-[1fr_auto_auto] gap-4 items-end">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
-                      Proyecto a analizar
+                      {mode === 'project' ? 'Proyecto a analizar' : 'Cliente a analizar'}
                     </label>
                     <select
                       value={selectedId}
                       onChange={(e) => setSelectedId(e.target.value)}
                       className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white font-semibold text-slate-900 transition"
                     >
-                      {projects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} · €{p.rate}/h
-                        </option>
-                      ))}
+                      {mode === 'project'
+                        ? projects.map((p) => {
+                            const cli = p.client_id
+                              ? clients.find((c) => c.id === p.client_id)
+                              : null;
+                            return (
+                              <option key={p.id} value={p.id}>
+                                {cli ? `${cli.name} · ` : ''}
+                                {p.name} · €{p.rate}/h
+                              </option>
+                            );
+                          })
+                        : clientsWithProjects.map((c) => {
+                            const count = projects.filter((p) => p.client_id === c.id).length;
+                            return (
+                              <option key={c.id} value={c.id}>
+                                {c.name} ({count} {count === 1 ? 'proy.' : 'proys.'})
+                              </option>
+                            );
+                          })}
                     </select>
                   </div>
                   <button
                     onClick={exportCSV}
-                    disabled={!selectedProject || projectSessions.length === 0}
+                    disabled={!analysisTitle || analysisSessions.length === 0}
                     className="px-5 py-3 bg-slate-100 text-slate-700 rounded-lg font-semibold hover:bg-slate-200 transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     ↓ Exportar CSV
                   </button>
                   <button
                     onClick={exportPDF}
-                    disabled={!selectedProject || projectSessions.length === 0 || exporting}
+                    disabled={!analysisTitle || analysisSessions.length === 0 || exporting}
                     className="px-5 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap relative"
                   >
                     {exporting ? 'Generando…' : (
@@ -542,7 +711,59 @@ export default function Projects() {
                 </div>
               </div>
 
-              {selectedProject && (
+              {/* Client info card (when applicable) */}
+              {(projectClient || selectedClient) && (
+                <div className="bg-gradient-to-br from-blue-50 to-white border border-blue-200 rounded-2xl p-5 mb-6">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-1">
+                        {mode === 'project' ? 'Cliente del proyecto' : 'Cliente'}
+                      </p>
+                      <h3 className="text-xl font-bold text-slate-900">
+                        {(projectClient || selectedClient).name}
+                      </h3>
+                      <div className="text-sm text-slate-600 mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                        {(projectClient || selectedClient).tax_id && (
+                          <span>
+                            NIF: <span className="font-mono">{(projectClient || selectedClient).tax_id}</span>
+                          </span>
+                        )}
+                        {(projectClient || selectedClient).email && (
+                          <span>✉ {(projectClient || selectedClient).email}</span>
+                        )}
+                        {(projectClient || selectedClient).city && (
+                          <span>📍 {(projectClient || selectedClient).city}</span>
+                        )}
+                      </div>
+                    </div>
+                    <Link
+                      href="/clients"
+                      className="text-sm text-blue-600 hover:underline font-semibold whitespace-nowrap"
+                    >
+                      Ver / editar →
+                    </Link>
+                  </div>
+                  {mode === 'client' && clientProjects.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-blue-100">
+                      <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+                        Proyectos incluidos
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {clientProjects.map((p) => (
+                          <span
+                            key={p.id}
+                            className="text-xs font-semibold bg-white border border-slate-200 text-slate-700 px-2.5 py-1 rounded-full"
+                          >
+                            {p.name} · €{p.rate}/h
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {analysisTitle && (
                 <>
                   {/* Stats */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
@@ -557,11 +778,21 @@ export default function Projects() {
                       label="Media/sesión"
                       value={`${stats.avgSessionMin.toFixed(0)} min`}
                     />
-                    <StatCard label="Tarifa" value={`€${selectedProject.rate}/h`} />
-                    <StatCard
-                      label="Tarifa efectiva"
-                      value={`€${stats.effectiveRate.toFixed(2)}/h`}
-                    />
+                    {mode === 'project' && selectedProject && (
+                      <>
+                        <StatCard label="Tarifa" value={`€${selectedProject.rate}/h`} />
+                        <StatCard
+                          label="Tarifa efectiva"
+                          value={`€${stats.effectiveRate.toFixed(2)}/h`}
+                        />
+                      </>
+                    )}
+                    {mode === 'client' && (
+                      <StatCard
+                        label="Tarifa media"
+                        value={`€${stats.effectiveRate.toFixed(2)}/h`}
+                      />
+                    )}
                     <StatCard
                       label="Primera sesión"
                       value={
@@ -586,16 +817,16 @@ export default function Projects() {
                     />
                   </div>
 
-                  {projectSessions.length === 0 ? (
+                  {analysisSessions.length === 0 ? (
                     <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
                       <p className="text-slate-500">
-                        Este proyecto aún no tiene sesiones. Empieza el cronómetro desde el
-                        Dashboard.
+                        {mode === 'project'
+                          ? 'Este proyecto aún no tiene sesiones. Empieza el cronómetro desde el Dashboard.'
+                          : 'Este cliente aún no tiene sesiones registradas en sus proyectos.'}
                       </p>
                     </div>
                   ) : (
                     <>
-                      {/* Daily chart */}
                       <ChartCard
                         title="Horas por día"
                         subtitle="Últimos 30 días"
@@ -624,7 +855,6 @@ export default function Projects() {
                         </ResponsiveContainer>
                       </ChartCard>
 
-                      {/* Weekly chart */}
                       <ChartCard
                         title="Ingresos por semana"
                         subtitle="Últimas 12 semanas"
@@ -656,7 +886,6 @@ export default function Projects() {
                         </ResponsiveContainer>
                       </ChartCard>
 
-                      {/* Hourly chart */}
                       <ChartCard
                         title="Distribución por hora del día"
                         subtitle="Cuándo sueles trabajar"
@@ -696,7 +925,7 @@ export default function Projects() {
                             Detalle de sesiones
                           </h2>
                           <p className="text-sm text-slate-500 mt-1">
-                            {projectSessions.length} sesiones registradas
+                            {analysisSessions.length} sesiones registradas
                           </p>
                         </div>
                         <div className="overflow-x-auto">
@@ -704,6 +933,7 @@ export default function Projects() {
                             <thead className="bg-slate-50 border-b border-slate-100">
                               <tr className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
                                 <th className="px-6 py-3">Fecha</th>
+                                {mode === 'client' && <th className="px-6 py-3">Proyecto</th>}
                                 <th className="px-6 py-3">Inicio</th>
                                 <th className="px-6 py-3">Fin</th>
                                 <th className="px-6 py-3 text-right">Duración</th>
@@ -711,7 +941,7 @@ export default function Projects() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                              {[...projectSessions]
+                              {[...analysisSessions]
                                 .sort((a, b) => sessionDate(b) - sessionDate(a))
                                 .map((s) => {
                                   const start = s.start_time
@@ -719,11 +949,17 @@ export default function Projects() {
                                     : new Date(s.created_at);
                                   const end = s.end_time ? new Date(s.end_time) : null;
                                   const hours = sessionHours(s);
+                                  const proj = projects.find((p) => p.id === s.project_id);
                                   return (
                                     <tr key={s.id} className="hover:bg-slate-50/50">
                                       <td className="px-6 py-3 text-sm font-medium text-slate-900">
                                         {start.toLocaleDateString('es-ES')}
                                       </td>
+                                      {mode === 'client' && (
+                                        <td className="px-6 py-3 text-sm text-slate-700 font-medium">
+                                          {proj?.name || '—'}
+                                        </td>
+                                      )}
                                       <td className="px-6 py-3 text-sm text-slate-600 tabular-nums">
                                         {start.toLocaleTimeString('es-ES', {
                                           hour: '2-digit',
