@@ -592,6 +592,12 @@ export default function Projects() {
               >
                 Mis clientes
               </Link>
+                  <Link
+                href="/invoices"
+                className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
+              >
+                Facturas
+              </Link>
               <button
                 onClick={async () => {
                   await supabase.auth.signOut();
