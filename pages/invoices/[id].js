@@ -136,13 +136,13 @@ export default function InvoiceDetail() {
       const contentWidth = pageWidth - margin * 2;
 
       // Brand colors
-      const colorPrimary = [37, 99, 235];      // blue-600
-      const colorDark = [15, 23, 42];          // slate-900
-      const colorMuted = [100, 116, 139];      // slate-500
-      const colorBorder = [226, 232, 240];     // slate-200
-      const colorBg = [248, 250, 252];         // slate-50
-      const colorRed = [220, 38, 38];          // red-600
-      const colorGreen = [22, 163, 74];        // green-600
+      const colorPrimary = [37, 99, 235];
+      const colorDark = [15, 23, 42];
+      const colorMuted = [100, 116, 139];
+      const colorBorder = [226, 232, 240];
+      const colorBg = [248, 250, 252];
+      const colorRed = [220, 38, 38];
+      const colorGreen = [22, 163, 74];
 
       // Helper: load image as base64
       const loadImageAsBase64 = (url) =>
@@ -169,7 +169,6 @@ export default function InvoiceDetail() {
           img.src = url;
         });
 
-      // Try to load logo
       let logoData = null;
       if (freelancer.logo_url) {
         logoData = await loadImageAsBase64(freelancer.logo_url);
@@ -178,7 +177,6 @@ export default function InvoiceDetail() {
       let y = margin;
 
       // ============== HEADER ==============
-      // Logo (left)
       const logoMaxSize = 22;
       let headerLeftX = margin;
       if (logoData) {
@@ -197,7 +195,6 @@ export default function InvoiceDetail() {
         } catch {}
       }
 
-      // Freelancer info (next to logo)
       pdf.setTextColor(...colorDark);
       pdf.setFontSize(14);
       pdf.setFont('helvetica', 'bold');
@@ -308,7 +305,6 @@ export default function InvoiceDetail() {
       const colPriceX = margin + contentWidth - 40;
       const colAmountX = margin + contentWidth;
 
-      // Header row
       pdf.setFillColor(...colorPrimary);
       pdf.rect(margin, y, contentWidth, 7, 'F');
       pdf.setTextColor(255, 255, 255);
@@ -320,24 +316,20 @@ export default function InvoiceDetail() {
       pdf.text('IMPORTE', colAmountX - 2, y + 5, { align: 'right' });
       y += 7;
 
-      // Lines
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(8);
       pdf.setTextColor(...colorDark);
 
       lines.forEach((line, idx) => {
-        // Wrap description if too long
         const descLines = pdf.splitTextToSize(
           line.description || '',
           contentWidth - 75
         );
         const rowHeight = Math.max(6, descLines.length * 4 + 2);
 
-        // Page break if needed
         if (y + rowHeight + 50 > pageHeight - margin) {
           pdf.addPage();
           y = margin;
-          // Mini header on new page
           pdf.setFontSize(8);
           pdf.setFont('helvetica', 'italic');
           pdf.setTextColor(...colorMuted);
@@ -347,7 +339,6 @@ export default function InvoiceDetail() {
             y
           );
           y += 6;
-          // Re-draw column headers
           pdf.setFillColor(...colorPrimary);
           pdf.rect(margin, y, contentWidth, 7, 'F');
           pdf.setTextColor(255, 255, 255);
@@ -362,7 +353,6 @@ export default function InvoiceDetail() {
           pdf.setTextColor(...colorDark);
         }
 
-        // Alternating row background
         if (idx % 2 === 0) {
           pdf.setFillColor(...colorBg);
           pdf.rect(margin, y, contentWidth, rowHeight, 'F');
@@ -384,7 +374,6 @@ export default function InvoiceDetail() {
         y += rowHeight;
       });
 
-      // Bottom border of table
       pdf.setDrawColor(...colorBorder);
       pdf.setLineWidth(0.3);
       pdf.line(margin, y, margin + contentWidth, y);
@@ -420,7 +409,6 @@ export default function InvoiceDetail() {
         y += 5;
       }
 
-      // Total line
       y += 1;
       pdf.setDrawColor(...colorDark);
       pdf.setLineWidth(0.5);
@@ -454,7 +442,121 @@ export default function InvoiceDetail() {
           pdf.setFontSize(7);
           pdf.setFont('helvetica', 'bold');
           pdf.setTextColor(...colorMuted);
-          pd
+          pdf.text('CONDICIONES DE PAGO', margin + 3, blockY);
+          blockY += 3.5;
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(...colorDark);
+          pdf.setFontSize(8);
+          const termLines = pdf.splitTextToSize(
+            invoice.payment_terms,
+            contentWidth - 6
+          );
+          pdf.text(termLines, margin + 3, blockY);
+          blockY += termLines.length * 3.5 + 2;
+        }
+        if (freelancer.iban) {
+          pdf.setFontSize(7);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(...colorMuted);
+          pdf.text('DATOS BANCARIOS', margin + 3, blockY);
+          blockY += 3.5;
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(...colorDark);
+          pdf.setFontSize(8);
+          pdf.text(
+            `${freelancer.iban}${freelancer.bank_name ? ' · ' + freelancer.bank_name : ''}`,
+            margin + 3,
+            blockY
+          );
+        }
+
+        y += blockHeight + 5;
+      }
+
+      // ============== INVOICE FOOTER (custom) ==============
+      if (freelancer.invoice_footer) {
+        pdf.setFontSize(7);
+        pdf.setFont('helvetica', 'italic');
+        pdf.setTextColor(...colorMuted);
+        const footerLines = pdf.splitTextToSize(
+          freelancer.invoice_footer,
+          contentWidth
+        );
+        pdf.text(footerLines, margin, y, { align: 'left' });
+      }
+
+      // ============== PAGE FOOTER ON ALL PAGES ==============
+      const totalPages = pdf.internal.getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        pdf.setPage(p);
+        pdf.setFontSize(7);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(...colorMuted);
+        pdf.text(
+          `Página ${p} de ${totalPages}`,
+          margin,
+          pageHeight - 7
+        );
+        pdf.text(
+          'Generada con Timely',
+          pageWidth - margin,
+          pageHeight - 7,
+          { align: 'right' }
+        );
+      }
+
+      // ============== PAID STAMP ==============
+      if (invoice.status === 'paid') {
+        pdf.setPage(1);
+        try {
+          pdf.setTextColor(...colorGreen);
+          pdf.setFontSize(60);
+          pdf.setFont('helvetica', 'bold');
+          if (pdf.setGState) {
+            const gs = new pdf.GState({ opacity: 0.2 });
+            pdf.setGState(gs);
+          }
+          pdf.text('PAGADA', pageWidth / 2, pageHeight / 2, {
+            align: 'center',
+            angle: -25,
+          });
+          if (pdf.setGState) {
+            const gs2 = new pdf.GState({ opacity: 1 });
+            pdf.setGState(gs2);
+          }
+        } catch (e) {
+          // Stamp is optional
+        }
+      }
+
+      // ============== SAVE ==============
+      const safeClient = (client.name || 'cliente').replace(/[^a-z0-9]/gi, '_');
+      const fileName = `factura_${invoice.invoice_number}_${safeClient}.pdf`;
+      pdf.save(fileName);
+      showToast('success', 'PDF descargado');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showToast('error', 'Error generando el PDF');
+    }
+  };
+
+  // PDF helper: format date
+  const formatDateForPdf = (iso) => {
+    if (!iso) return '—';
+    return new Intl.DateTimeFormat('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(new Date(iso));
+  };
+
+  // PDF helper: format EUR
+  const formatEurForPdf = (n) => {
+    return new Intl.NumberFormat('es-ES', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n || 0) + ' EUR';
+  };
 
   // ---------- Helpers ----------
   const formatEUR = (n) =>
