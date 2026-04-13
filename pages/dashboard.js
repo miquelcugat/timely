@@ -597,6 +597,12 @@ export default function Dashboard() {
               >
                 Mis clientes
               </button>
+                      <button
+                onClick={() => router.push('/invoices')}
+                className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
+              >
+                Facturas
+              </button>
               <button
                 onClick={() => router.push('/account')}
                 className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
