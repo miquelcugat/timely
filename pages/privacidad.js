@@ -5,7 +5,7 @@
 //   [TU NIF]      → tu NIF/DNI con letra (ej: 12345678A)
 //   [TU CIUDAD]   → ciudad de residencia (ej: Barcelona)
 //   [TU EMAIL]    → email de contacto operativo
-//   [TU DOMINIO]  → URL final de tu app (ej: https://timely.app)
+//   [TU DOMINIO]  → URL final de tu app (ej: https://Valopo.app)
 // Sin estos datos rellenados, esta página NO es válida legalmente.
 // ============================================================
 
@@ -16,7 +16,7 @@ export default function Privacidad() {
   return (
     <>
       <Head>
-        <title>Política de Privacidad · Timely</title>
+        <title>Política de Privacidad · Valopo</title>
         <meta name="robots" content="index, follow" />
       </Head>
 
@@ -27,7 +27,7 @@ export default function Privacidad() {
               <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-sm">
                 <span className="text-white font-bold text-lg">⏱</span>
               </div>
-              <span className="font-bold text-xl text-slate-900">Timely</span>
+              <span className="font-bold text-xl text-slate-900">Valopo</span>
             </Link>
             <Link
               href="/"
@@ -49,7 +49,7 @@ export default function Privacidad() {
           <div className="space-y-6 text-slate-700 leading-relaxed">
             <section>
               <p>
-                En Timely valoramos tu privacidad y nos comprometemos a proteger
+                En Valopo valoramos tu privacidad y nos comprometemos a proteger
                 tus datos personales. Esta política explica qué datos recogemos,
                 cómo los usamos y qué derechos tienes sobre ellos, en cumplimiento
                 del Reglamento (UE) 2016/679 (RGPD) y la Ley Orgánica 3/2018 de
@@ -90,7 +90,7 @@ export default function Privacidad() {
                 <li>
                   <strong>Datos de facturación:</strong> en caso de contratar el
                   Plan Pro, los datos de pago son tratados directamente por
-                  Stripe Payments Europe, Ltd. Timely no almacena datos
+                  Stripe Payments Europe, Ltd. Valopo no almacena datos
                   bancarios ni de tarjeta.
                 </li>
                 <li>
@@ -265,7 +265,7 @@ export default function Privacidad() {
                 9. Menores de edad
               </h2>
               <p>
-                Timely no está dirigido a menores de 14 años. Si detectamos que
+                Valopo no está dirigido a menores de 14 años. Si detectamos que
                 hemos recogido datos de un menor sin el consentimiento de sus
                 padres o tutores, los eliminaremos de forma inmediata.
               </p>
