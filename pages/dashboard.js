@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { supabase } from '../lib/supabaseClient';
 import { usePlan } from '../lib/usePlan';
+import OnboardingTour from '../components/OnboardingTour';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -47,6 +48,9 @@ export default function Dashboard() {
 
   // Stripe loading
   const [opening, setOpening] = useState(false);
+  // Onboarding tour
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   // Notes modal: when stopping timer (pending) or editing existing session
   const [pendingSession, setPendingSession] = useState(null);
@@ -125,6 +129,35 @@ export default function Dashboard() {
         { data: sessionsData, error: sErr },
         { data: clientsData, error: cErr },
       ] = await Promise.all([
+        const loadData = async (userId) => {
+    try {
+      const [
+        { data: projectsData, error: pErr },
+        { data: sessionsData, error: sErr },
+        { data: clientsData, error: cErr },
+        { data: profileData },
+      ] = await Promise.all([
+        supabase
+          .from('projects')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('sessions')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('clients')
+          .select('id, name')
+          .eq('user_id', userId)
+          .order('name', { ascending: true }),
+        supabase
+          .from('freelancer_profile')
+          .select('onboarded_at')
+          .eq('user_id', userId)
+          .maybeSingle(),
+      ]);
         supabase
           .from('projects')
           .select('*')
@@ -150,6 +183,13 @@ export default function Dashboard() {
       setSessions(sessionsData || []);
       setClients(clientsData || []);
 
+      // Detect if onboarding should be shown
+      const hasNoProjects = (projectsData || []).length === 0;
+      const neverOnboarded = !profileData?.onboarded_at;
+      if (hasNoProjects && neverOnboarded && !onboardingChecked) {
+        setShowOnboarding(true);
+      }
+      setOnboardingChecked(true);
       setActiveProject((prev) => {
         if (prev && (projectsData || []).some((p) => p.id === prev)) return prev;
         return projectsData?.[0]?.id || '';
@@ -240,6 +280,23 @@ export default function Dashboard() {
   const triggerUpgrade = (reason) => {
     setUpgradeReason(reason);
     setShowUpgradeModal(true);
+  };
+  const completeOnboarding = async () => {
+    try {
+      await supabase
+        .from('freelancer_profile')
+        .upsert(
+          {
+            user_id: user.id,
+            onboarded_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        );
+    } catch (error) {
+      console.error('Error saving onboarding:', error);
+    } finally {
+      setShowOnboarding(false);
+    }
   };
 
   // ---------- Timer actions ----------
@@ -1219,7 +1276,8 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-
+{/* Onboarding tour */}
+        {showOnboarding && <OnboardingTour onComplete={completeOnboarding} />}
         {/* Edit note of existing session modal */}
         {editingNoteSession && (
           <div
