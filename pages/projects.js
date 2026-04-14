@@ -343,7 +343,7 @@ export default function Projects() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `timely_${analysisTitle.replace(/[^a-z0-9]/gi, '_')}_${
+    a.download = `Valopo_${analysisTitle.replace(/[^a-z0-9]/gi, '_')}_${
       new Date().toISOString().split('T')[0]
     }.csv`;
     document.body.appendChild(a);
@@ -378,7 +378,7 @@ export default function Projects() {
       pdf.setFontSize(18);
       pdf.setFont('helvetica', 'bold');
       pdf.text(
-        mode === 'project' ? 'Timely · Informe de proyecto' : 'Timely · Informe de cliente',
+        mode === 'project' ? 'Valopo · Informe de proyecto' : 'Valopo · Informe de cliente',
         margin,
         16
       );
@@ -526,7 +526,7 @@ export default function Projects() {
       }
 
       pdf.save(
-        `timely_${analysisTitle.replace(/[^a-z0-9]/gi, '_')}_${
+        `Valopo_${analysisTitle.replace(/[^a-z0-9]/gi, '_')}_${
           new Date().toISOString().split('T')[0]
         }.pdf`
       );
@@ -560,7 +560,7 @@ export default function Projects() {
   return (
     <>
       <Head>
-        <title>Mis proyectos · Timely</title>
+        <title>Mis proyectos · Valopo</title>
       </Head>
 
       <div className="min-h-screen bg-slate-50">
@@ -571,7 +571,7 @@ export default function Projects() {
               <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-sm">
                 <span className="text-white font-bold text-lg">⏱</span>
               </div>
-              <span className="font-bold text-xl text-slate-900">Timely</span>
+              <span className="font-bold text-xl text-slate-900">Valopo</span>
             </div>
             <div className="flex items-center gap-2 sm:gap-4">
               <Link
