@@ -53,6 +53,9 @@ export default function Dashboard() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
 
+  // Profile (goals)
+  const [profile, setProfile] = useState(null);
+
   // Notes modal: when stopping timer (pending) or editing existing session
   const [pendingSession, setPendingSession] = useState(null);
   const [editingNoteSession, setEditingNoteSession] = useState(null);
@@ -98,7 +101,7 @@ export default function Dashboard() {
       await loadData(data.session.user.id);
 
       try {
-        const saved = JSON.parse(localStorage.getItem('Valopo_timer') || 'null');
+        const saved = JSON.parse(localStorage.getItem('timely_timer') || 'null');
         if (saved?.startedAt && saved?.projectId) {
           startedAtRef.current = saved.startedAt;
           setActiveProject(saved.projectId);
@@ -147,7 +150,7 @@ export default function Dashboard() {
           .order('name', { ascending: true }),
         supabase
           .from('freelancer_profile')
-          .select('onboarded_at')
+          .select('onboarded_at, monthly_income_goal, hourly_rate_goal')
           .eq('user_id', userId)
           .maybeSingle(),
       ]);
@@ -159,6 +162,7 @@ export default function Dashboard() {
       setProjects(projectsData || []);
       setSessions(sessionsData || []);
       setClients(clientsData || []);
+      setProfile(profileData || null);
 
       // Detect if onboarding should be shown
       const hasNoProjects = (projectsData || []).length === 0;
@@ -289,7 +293,7 @@ export default function Dashboard() {
     setTimerSeconds(0);
     setIsRunning(true);
     localStorage.setItem(
-      'Valopo_timer',
+      'timely_timer',
       JSON.stringify({ startedAt: now, projectId: activeProject })
     );
   };
@@ -302,7 +306,7 @@ export default function Dashboard() {
 
     setIsRunning(false);
     startedAtRef.current = null;
-    localStorage.removeItem('Valopo_timer');
+    localStorage.removeItem('timely_timer');
 
     if (duration < 1) {
       setTimerSeconds(0);
@@ -399,7 +403,7 @@ export default function Dashboard() {
     setIsRunning(false);
     startedAtRef.current = null;
     setTimerSeconds(0);
-    localStorage.removeItem('Valopo_timer');
+    localStorage.removeItem('timely_timer');
   };
 
   // ---------- Project actions ----------
@@ -566,6 +570,81 @@ export default function Dashboard() {
 
   const recentSessions = sessions.slice(0, 8);
 
+  // ---------- Goals (Nivel 1.5) ----------
+  const monthlyGoal = profile?.monthly_income_goal ? Number(profile.monthly_income_goal) : null;
+  const hourlyGoal = profile?.hourly_rate_goal ? Number(profile.hourly_rate_goal) : null;
+  const hasAnyGoal = monthlyGoal != null || hourlyGoal != null;
+
+  // Monthly progress
+  const monthProgress = monthlyGoal && monthlyGoal > 0
+    ? Math.min(100, (monthEarnings / monthlyGoal) * 100)
+    : 0;
+  const monthRemaining = monthlyGoal ? Math.max(0, monthlyGoal - monthEarnings) : 0;
+
+  // Days remaining in month
+  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const currentDayOfMonth = now.getDate();
+  const daysRemaining = lastDayOfMonth - currentDayOfMonth;
+
+  // Expected progress (based on day of the month)
+  const expectedProgress = (currentDayOfMonth / lastDayOfMonth) * 100;
+  const progressDelta = monthProgress - expectedProgress;
+
+  // Color of the progress bar based on how user is doing vs expected pace
+  let monthBarColor = 'from-blue-500 to-blue-600';
+  let monthStatusLabel = '';
+  let monthStatusColor = 'text-slate-500';
+  if (monthlyGoal) {
+    if (monthProgress >= 100) {
+      monthBarColor = 'from-emerald-500 to-emerald-600';
+      monthStatusLabel = '🎉 ¡Objetivo alcanzado!';
+      monthStatusColor = 'text-emerald-700';
+    } else if (progressDelta >= 5) {
+      monthBarColor = 'from-emerald-500 to-emerald-600';
+      monthStatusLabel = `🟢 Por encima del ritmo (+${progressDelta.toFixed(0)}%)`;
+      monthStatusColor = 'text-emerald-700';
+    } else if (progressDelta >= -5) {
+      monthBarColor = 'from-blue-500 to-blue-600';
+      monthStatusLabel = '🔵 En el ritmo esperado';
+      monthStatusColor = 'text-blue-700';
+    } else if (progressDelta >= -15) {
+      monthBarColor = 'from-amber-500 to-amber-600';
+      monthStatusLabel = `🟡 Algo por debajo (${progressDelta.toFixed(0)}%)`;
+      monthStatusColor = 'text-amber-700';
+    } else {
+      monthBarColor = 'from-red-500 to-red-600';
+      monthStatusLabel = `🔴 Lejos del ritmo (${progressDelta.toFixed(0)}%)`;
+      monthStatusColor = 'text-red-700';
+    }
+  }
+
+  // Real €/h this month
+  const realHourlyRate = monthHours > 0 ? monthEarnings / monthHours : 0;
+  let hourlyDelta = null;
+  let hourlyColor = 'text-slate-900';
+  let hourlyBg = 'bg-slate-50';
+  let hourlyBorder = 'border-slate-200';
+  let hourlyLabel = '';
+  if (hourlyGoal && monthHours > 0) {
+    hourlyDelta = ((realHourlyRate - hourlyGoal) / hourlyGoal) * 100;
+    if (realHourlyRate >= hourlyGoal) {
+      hourlyColor = 'text-emerald-700';
+      hourlyBg = 'bg-emerald-50';
+      hourlyBorder = 'border-emerald-200';
+      hourlyLabel = `🟢 +${hourlyDelta.toFixed(0)}% sobre tu objetivo`;
+    } else if (hourlyDelta >= -10) {
+      hourlyColor = 'text-amber-700';
+      hourlyBg = 'bg-amber-50';
+      hourlyBorder = 'border-amber-200';
+      hourlyLabel = `🟡 ${hourlyDelta.toFixed(0)}% del objetivo`;
+    } else {
+      hourlyColor = 'text-red-700';
+      hourlyBg = 'bg-red-50';
+      hourlyBorder = 'border-red-200';
+      hourlyLabel = `🔴 ${hourlyDelta.toFixed(0)}% del objetivo`;
+    }
+  }
+
   const atProjectLimit = !isPro && projects.length >= limits.maxProjects;
   const projectsRemaining = isPro ? Infinity : Math.max(0, limits.maxProjects - projects.length);
 
@@ -585,7 +664,7 @@ export default function Dashboard() {
   return (
     <>
       <Head>
-        <title>Dashboard · Valopo</title>
+        <title>Dashboard · Timely</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
@@ -598,7 +677,7 @@ export default function Dashboard() {
                 <span className="text-white font-bold text-lg">⏱</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-xl text-slate-900">Valopo</span>
+                <span className="font-bold text-xl text-slate-900">Timely</span>
                 <span
                   className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                     isPro
@@ -656,6 +735,155 @@ export default function Dashboard() {
         </header>
 
         <main className="max-w-6xl mx-auto px-6 py-8 sm:py-10">
+          {/* ============= GOALS BLOCK (Nivel 1.5) ============= */}
+          {hasAnyGoal ? (
+            <div className="grid lg:grid-cols-3 gap-4 mb-6">
+              {/* Monthly progress (2/3 width) */}
+              {monthlyGoal && (
+                <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                  <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                        🎯 Tu objetivo del mes
+                      </p>
+                      <p className="text-3xl font-bold text-slate-900 tabular-nums mt-1">
+                        {formatEUR(monthEarnings)}
+                        <span className="text-base font-normal text-slate-400">
+                          {' '}/ {formatEUR(monthlyGoal)}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-slate-900 tabular-nums">
+                        {monthProgress.toFixed(0)}%
+                      </p>
+                      {monthStatusLabel && (
+                        <p className={`text-xs font-semibold mt-0.5 ${monthStatusColor}`}>
+                          {monthStatusLabel}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full bg-gradient-to-r ${monthBarColor} rounded-full transition-all duration-500`}
+                      style={{ width: `${monthProgress}%` }}
+                    />
+                  </div>
+                  {/* Footer info */}
+                  <div className="flex justify-between items-center mt-3 text-xs text-slate-500">
+                    <span>
+                      Te faltan{' '}
+                      <strong className="text-slate-700 tabular-nums">
+                        {formatEUR(monthRemaining)}
+                      </strong>
+                    </span>
+                    <span>
+                      Quedan <strong className="text-slate-700">{daysRemaining}</strong>{' '}
+                      días en {now.toLocaleDateString('es-ES', { month: 'long' })}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Real €/h card (1/3 width) */}
+              {hourlyGoal && (
+                <div
+                  className={`${hourlyBg} ${hourlyBorder} border rounded-2xl p-6 shadow-sm`}
+                >
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                    💰 Tu €/h real
+                  </p>
+                  {monthHours > 0 ? (
+                    <>
+                      <p className={`text-3xl font-bold tabular-nums mt-1 ${hourlyColor}`}>
+                        {realHourlyRate.toFixed(2)}
+                        <span className="text-base font-normal"> €/h</span>
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Objetivo:{' '}
+                        <strong className="text-slate-700 tabular-nums">
+                          {hourlyGoal} €/h
+                        </strong>
+                      </p>
+                      {hourlyLabel && (
+                        <p className={`text-xs font-semibold mt-3 ${hourlyColor}`}>
+                          {hourlyLabel}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-bold text-slate-400 tabular-nums mt-1">
+                        — €/h
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Sin sesiones este mes
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* If only monthly goal is set, show a CTA card to also configure hourly */}
+              {monthlyGoal && !hourlyGoal && (
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 shadow-sm flex flex-col justify-center">
+                  <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">
+                    💡 Tip
+                  </p>
+                  <p className="text-sm text-blue-900 mb-3">
+                    Configura también tu objetivo €/h para ver si tu trabajo está
+                    bien valorado.
+                  </p>
+                  <button
+                    onClick={() => router.push('/account')}
+                    className="text-xs font-semibold text-blue-700 hover:underline self-start"
+                  >
+                    Configurar →
+                  </button>
+                </div>
+              )}
+
+              {/* If only hourly goal is set, show CTA for monthly */}
+              {hourlyGoal && !monthlyGoal && (
+                <div className="lg:col-span-2 bg-blue-50 border border-blue-200 rounded-2xl p-6 shadow-sm">
+                  <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">
+                    💡 Tip
+                  </p>
+                  <p className="text-sm text-blue-900 mb-3">
+                    Configura tu objetivo mensual de facturación para ver tu
+                    progreso del mes con barra visual.
+                  </p>
+                  <button
+                    onClick={() => router.push('/account')}
+                    className="text-xs font-semibold text-blue-700 hover:underline"
+                  >
+                    Configurar →
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-5 mb-6 flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  💡 Define tus objetivos de ingresos
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Configúralos en Mi cuenta para ver tu progreso real del mes y
+                  saber si tu trabajo está bien valorado.
+                </p>
+              </div>
+              <button
+                onClick={() => router.push('/account')}
+                className="text-xs font-bold text-blue-600 hover:underline whitespace-nowrap"
+              >
+                Configurar objetivos →
+              </button>
+            </div>
+          )}
+
           {/* Top stats strip */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             {[
@@ -1052,7 +1280,7 @@ export default function Dashboard() {
                 PRO ACTIVO
               </div>
               <h3 className="text-2xl font-bold text-slate-900 mb-2">Eres miembro Pro</h3>
-              <p className="mb-5 text-slate-600">Gracias por confiar en Valopo. Gestiona tu suscripción cuando quieras.</p>
+              <p className="mb-5 text-slate-600">Gracias por confiar en Timely. Gestiona tu suscripción cuando quieras.</p>
               <button
                 onClick={openPortal}
                 disabled={opening}
