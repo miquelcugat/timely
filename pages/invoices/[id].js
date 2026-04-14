@@ -399,11 +399,11 @@ export default function InvoiceDetail() {
       });
       y += 5;
 
-      if (Number(invoice.irpf_rate) > 0) {
+     if (Number(invoice.irpf_rate) > 0) {
         pdf.setTextColor(...colorMuted);
         pdf.text(`IRPF (${invoice.irpf_rate}%)`, totalsX, y);
-        pdf.setTextColor(...colorRed);
-        pdf.text(`− ${formatEurForPdf(invoice.irpf_amount)}`, colAmountX - 2, y, {
+        pdf.setTextColor(...colorDark);
+        pdf.text(`- ${formatEurForPdf(invoice.irpf_amount)}`, colAmountX - 2, y, {
           align: 'right',
         });
         y += 5;
