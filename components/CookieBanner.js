@@ -7,7 +7,7 @@ export default function CookieBanner() {
   useEffect(() => {
     // Solo mostrar si no se ha aceptado antes
     try {
-      const accepted = localStorage.getItem('timely_cookies_accepted');
+      const accepted = localStorage.getItem('Valopo_cookies_accepted');
       if (!accepted) setShow(true);
     } catch {
       // Si localStorage no está disponible (modo privado, etc.) no mostramos
@@ -16,7 +16,7 @@ export default function CookieBanner() {
 
   const accept = () => {
     try {
-      localStorage.setItem('timely_cookies_accepted', new Date().toISOString());
+      localStorage.setItem('Valopo_cookies_accepted', new Date().toISOString());
     } catch {}
     setShow(false);
   };
