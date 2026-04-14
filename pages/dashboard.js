@@ -4,6 +4,22 @@ import Head from 'next/head';
 import { supabase } from '../lib/supabaseClient';
 import { usePlan } from '../lib/usePlan';
 import OnboardingTour from '../components/OnboardingTour';
+import {
+  Clock,
+  Target,
+  TrendingUp,
+  Lightbulb,
+  CheckCircle2,
+  Play,
+  Square,
+  X,
+  FileText,
+  User,
+  AlertTriangle,
+  Sparkles,
+  Plus,
+} from 'lucide-react';
+import { Target, TrendingUp, Lightbulb, CheckCircle2 } from 'lucide-react';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -120,7 +136,7 @@ export default function Dashboard() {
   // Detect ?upgraded=true after returning from Stripe
   useEffect(() => {
     if (router.query.upgraded === 'true') {
-      showToast('success', '¡Bienvenido a Pro! 🎉');
+      showToast('success', '¡Bienvenido a Pro!');
       router.replace('/dashboard', undefined, { shallow: true });
     }
   }, [router.query.upgraded, router, showToast]);
@@ -594,27 +610,33 @@ export default function Dashboard() {
   let monthBarColor = 'from-blue-500 to-blue-600';
   let monthStatusLabel = '';
   let monthStatusColor = 'text-slate-500';
+  let monthStatusDot = 'bg-slate-400';
   if (monthlyGoal) {
     if (monthProgress >= 100) {
       monthBarColor = 'from-emerald-500 to-emerald-600';
-      monthStatusLabel = '🎉 ¡Objetivo alcanzado!';
+      monthStatusLabel = '¡Objetivo alcanzado!';
       monthStatusColor = 'text-emerald-700';
+      monthStatusDot = 'bg-emerald-500';
     } else if (progressDelta >= 5) {
       monthBarColor = 'from-emerald-500 to-emerald-600';
-      monthStatusLabel = `🟢 Por encima del ritmo (+${progressDelta.toFixed(0)}%)`;
+      monthStatusLabel = `Por encima del ritmo (+${progressDelta.toFixed(0)}%)`;
       monthStatusColor = 'text-emerald-700';
+      monthStatusDot = 'bg-emerald-500';
     } else if (progressDelta >= -5) {
       monthBarColor = 'from-blue-500 to-blue-600';
-      monthStatusLabel = '🔵 En el ritmo esperado';
+      monthStatusLabel = 'En el ritmo esperado';
       monthStatusColor = 'text-blue-700';
+      monthStatusDot = 'bg-blue-500';
     } else if (progressDelta >= -15) {
       monthBarColor = 'from-amber-500 to-amber-600';
-      monthStatusLabel = `🟡 Algo por debajo (${progressDelta.toFixed(0)}%)`;
+      monthStatusLabel = `Algo por debajo (${progressDelta.toFixed(0)}%)`;
       monthStatusColor = 'text-amber-700';
+      monthStatusDot = 'bg-amber-500';
     } else {
       monthBarColor = 'from-red-500 to-red-600';
-      monthStatusLabel = `🔴 Lejos del ritmo (${progressDelta.toFixed(0)}%)`;
+      monthStatusLabel = `Lejos del ritmo (${progressDelta.toFixed(0)}%)`;
       monthStatusColor = 'text-red-700';
+      monthStatusDot = 'bg-red-500';
     }
   }
 
@@ -625,23 +647,27 @@ export default function Dashboard() {
   let hourlyBg = 'bg-slate-50';
   let hourlyBorder = 'border-slate-200';
   let hourlyLabel = '';
+  let hourlyDot = 'bg-slate-400';
   if (hourlyGoal && monthHours > 0) {
     hourlyDelta = ((realHourlyRate - hourlyGoal) / hourlyGoal) * 100;
     if (realHourlyRate >= hourlyGoal) {
       hourlyColor = 'text-emerald-700';
       hourlyBg = 'bg-emerald-50';
       hourlyBorder = 'border-emerald-200';
-      hourlyLabel = `🟢 +${hourlyDelta.toFixed(0)}% sobre tu objetivo`;
+      hourlyLabel = `+${hourlyDelta.toFixed(0)}% sobre tu objetivo`;
+      hourlyDot = 'bg-emerald-500';
     } else if (hourlyDelta >= -10) {
       hourlyColor = 'text-amber-700';
       hourlyBg = 'bg-amber-50';
       hourlyBorder = 'border-amber-200';
-      hourlyLabel = `🟡 ${hourlyDelta.toFixed(0)}% del objetivo`;
+      hourlyLabel = `${hourlyDelta.toFixed(0)}% del objetivo`;
+      hourlyDot = 'bg-amber-500';
     } else {
       hourlyColor = 'text-red-700';
       hourlyBg = 'bg-red-50';
       hourlyBorder = 'border-red-200';
-      hourlyLabel = `🔴 ${hourlyDelta.toFixed(0)}% del objetivo`;
+      hourlyLabel = `${hourlyDelta.toFixed(0)}% del objetivo`;
+      hourlyDot = 'bg-red-500';
     }
   }
 
@@ -674,7 +700,7 @@ export default function Dashboard() {
           <nav className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-sm">
-                <span className="text-white font-bold text-lg">⏱</span>
+                <Clock className="w-5 h-5 text-white" strokeWidth={2.5} />
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-xl text-slate-900">Timely</span>
@@ -742,23 +768,33 @@ export default function Dashboard() {
               {monthlyGoal && (
                 <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                   <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-                    <div>
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                        🎯 Tu objetivo del mes
-                      </p>
-                      <p className="text-3xl font-bold text-slate-900 tabular-nums mt-1">
-                        {formatEUR(monthEarnings)}
-                        <span className="text-base font-normal text-slate-400">
-                          {' '}/ {formatEUR(monthlyGoal)}
-                        </span>
-                      </p>
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Target className="w-5 h-5 text-blue-600" strokeWidth={2.25} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                          Tu objetivo del mes
+                        </p>
+                        <p className="text-3xl font-bold text-slate-900 tabular-nums mt-1">
+                          {formatEUR(monthEarnings)}
+                          <span className="text-base font-normal text-slate-400">
+                            {' '}/ {formatEUR(monthlyGoal)}
+                          </span>
+                        </p>
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="text-2xl font-bold text-slate-900 tabular-nums">
                         {monthProgress.toFixed(0)}%
                       </p>
                       {monthStatusLabel && (
-                        <p className={`text-xs font-semibold mt-0.5 ${monthStatusColor}`}>
+                        <p className={`text-xs font-semibold mt-0.5 inline-flex items-center gap-1.5 ${monthStatusColor}`}>
+                          {monthProgress >= 100 ? (
+                            <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={2.5} />
+                          ) : (
+                            <span className={`w-2 h-2 rounded-full ${monthStatusDot}`} />
+                          )}
                           {monthStatusLabel}
                         </p>
                       )}
@@ -792,15 +828,28 @@ export default function Dashboard() {
                 <div
                   className={`${hourlyBg} ${hourlyBorder} border rounded-2xl p-6 shadow-sm`}
                 >
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                    💰 Tu €/h real
-                  </p>
+                  <div className="flex items-start gap-3 mb-1">
+                    <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <TrendingUp className="w-5 h-5 text-blue-600" strokeWidth={2.25} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                        Tu €/h real
+                      </p>
+                      {monthHours > 0 ? (
+                        <p className={`text-3xl font-bold tabular-nums mt-1 ${hourlyColor}`}>
+                          {realHourlyRate.toFixed(2)}
+                          <span className="text-base font-normal"> €/h</span>
+                        </p>
+                      ) : (
+                        <p className="text-3xl font-bold text-slate-400 tabular-nums mt-1">
+                          — €/h
+                        </p>
+                      )}
+                    </div>
+                  </div>
                   {monthHours > 0 ? (
                     <>
-                      <p className={`text-3xl font-bold tabular-nums mt-1 ${hourlyColor}`}>
-                        {realHourlyRate.toFixed(2)}
-                        <span className="text-base font-normal"> €/h</span>
-                      </p>
                       <p className="text-xs text-slate-500 mt-1">
                         Objetivo:{' '}
                         <strong className="text-slate-700 tabular-nums">
@@ -808,20 +857,16 @@ export default function Dashboard() {
                         </strong>
                       </p>
                       {hourlyLabel && (
-                        <p className={`text-xs font-semibold mt-3 ${hourlyColor}`}>
+                        <p className={`text-xs font-semibold mt-3 inline-flex items-center gap-1.5 ${hourlyColor}`}>
+                          <span className={`w-2 h-2 rounded-full ${hourlyDot}`} />
                           {hourlyLabel}
                         </p>
                       )}
                     </>
                   ) : (
-                    <>
-                      <p className="text-3xl font-bold text-slate-400 tabular-nums mt-1">
-                        — €/h
-                      </p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Sin sesiones este mes
-                      </p>
-                    </>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Sin sesiones este mes
+                    </p>
                   )}
                 </div>
               )}
@@ -829,9 +874,12 @@ export default function Dashboard() {
               {/* If only monthly goal is set, show a CTA card to also configure hourly */}
               {monthlyGoal && !hourlyGoal && (
                 <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 shadow-sm flex flex-col justify-center">
-                  <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">
-                    💡 Tip
-                  </p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Lightbulb className="w-4 h-4 text-blue-700" strokeWidth={2.5} />
+                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">
+                      Tip
+                    </p>
+                  </div>
                   <p className="text-sm text-blue-900 mb-3">
                     Configura también tu objetivo €/h para ver si tu trabajo está
                     bien valorado.
@@ -848,9 +896,12 @@ export default function Dashboard() {
               {/* If only hourly goal is set, show CTA for monthly */}
               {hourlyGoal && !monthlyGoal && (
                 <div className="lg:col-span-2 bg-blue-50 border border-blue-200 rounded-2xl p-6 shadow-sm">
-                  <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">
-                    💡 Tip
-                  </p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Lightbulb className="w-4 h-4 text-blue-700" strokeWidth={2.5} />
+                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">
+                      Tip
+                    </p>
+                  </div>
                   <p className="text-sm text-blue-900 mb-3">
                     Configura tu objetivo mensual de facturación para ver tu
                     progreso del mes con barra visual.
@@ -866,14 +917,19 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-5 mb-6 flex items-center justify-between gap-4 flex-wrap">
-              <div>
-                <p className="text-sm font-semibold text-slate-900">
-                  💡 Define tus objetivos de ingresos
-                </p>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Configúralos en Mi cuenta para ver tu progreso real del mes y
-                  saber si tu trabajo está bien valorado.
-                </p>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Lightbulb className="w-5 h-5 text-blue-600" strokeWidth={2.25} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">
+                    Define tus objetivos de ingresos
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Configúralos en Mi cuenta para ver tu progreso real del mes y
+                    saber si tu trabajo está bien valorado.
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => router.push('/account')}
@@ -937,24 +993,26 @@ export default function Dashboard() {
                       <button
                         onClick={startSession}
                         disabled={!activeProject}
-                        className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg font-bold text-lg hover:bg-blue-700 active:scale-[0.99] transition disabled:bg-slate-300 disabled:cursor-not-allowed shadow-sm"
+                        className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg font-bold text-lg hover:bg-blue-700 active:scale-[0.99] transition disabled:bg-slate-300 disabled:cursor-not-allowed shadow-sm inline-flex items-center justify-center gap-2"
                       >
-                        ▶ Empezar a contar
+                        <Play className="w-5 h-5" strokeWidth={2.5} fill="currentColor" />
+                        Empezar a contar
                       </button>
                     ) : (
                       <div className="flex gap-3">
                         <button
                           onClick={stopSession}
-                          className="flex-1 px-6 py-4 bg-red-600 text-white rounded-lg font-bold text-lg hover:bg-red-700 active:scale-[0.99] transition shadow-sm"
+                          className="flex-1 px-6 py-4 bg-red-600 text-white rounded-lg font-bold text-lg hover:bg-red-700 active:scale-[0.99] transition shadow-sm inline-flex items-center justify-center gap-2"
                         >
-                          ⏹ Parar y guardar
+                          <Square className="w-5 h-5" strokeWidth={2.5} fill="currentColor" />
+                          Parar y guardar
                         </button>
                         <button
                           onClick={cancelSession}
                           className="px-5 py-4 bg-slate-100 text-slate-700 rounded-lg font-semibold hover:bg-slate-200 transition"
                           title="Cancelar sin guardar"
                         >
-                          ✕
+                          <X className="w-5 h-5" strokeWidth={2.5} />
                         </button>
                       </div>
                     )}
@@ -1089,16 +1147,19 @@ export default function Dashboard() {
                       ))}
                     </select>
                   ) : (
-                    <p className="text-xs text-slate-500">
-                      💡 ¿Quieres asignar este proyecto a un cliente?{' '}
-                      <button
-                        type="button"
-                        onClick={() => router.push('/clients')}
-                        className="text-blue-600 hover:underline font-semibold"
-                      >
-                        Crea tu primer cliente
-                      </button>
-                      .
+                    <p className="text-xs text-slate-500 inline-flex items-start gap-1.5">
+                      <Lightbulb className="w-3.5 h-3.5 flex-shrink-0 text-blue-600 mt-0.5" strokeWidth={2.25} />
+                      <span>
+                        ¿Quieres asignar este proyecto a un cliente?{' '}
+                        <button
+                          type="button"
+                          onClick={() => router.push('/clients')}
+                          className="text-blue-600 hover:underline font-semibold"
+                        >
+                          Crea tu primer cliente
+                        </button>
+                        .
+                      </span>
                     </p>
                   )}
                 </div>
@@ -1171,8 +1232,9 @@ export default function Dashboard() {
                         <div className="flex-1 min-w-0">
                           <h3 className="font-bold text-slate-900 truncate">{project.name}</h3>
                           {project.client_id && (
-                            <p className="text-xs text-slate-500 mt-0.5 truncate">
-                              👤 {clients.find((c) => c.id === project.client_id)?.name || 'Cliente borrado'}
+                            <p className="text-xs text-slate-500 mt-0.5 truncate inline-flex items-center gap-1">
+                              <User className="w-3 h-3" strokeWidth={2.25} />
+                              {clients.find((c) => c.id === project.client_id)?.name || 'Cliente borrado'}
                             </p>
                           )}
                           <p className="text-sm text-slate-500 mt-0.5 tabular-nums">
@@ -1232,8 +1294,9 @@ export default function Dashboard() {
                           {project?.name || 'Proyecto borrado'}
                         </p>
                         {s.notes ? (
-                          <p className="text-sm text-slate-600 truncate mt-0.5">
-                            📝 {s.notes}
+                          <p className="text-sm text-slate-600 truncate mt-0.5 inline-flex items-center gap-1.5">
+                            <FileText className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2.25} />
+                            <span className="truncate">{s.notes}</span>
                           </p>
                         ) : (
                           <p className="text-xs text-slate-400 italic mt-0.5 group-hover:text-slate-500 transition">
@@ -1260,10 +1323,10 @@ export default function Dashboard() {
                               label: 'esta sesión',
                             });
                           }}
-                          className="text-slate-400 hover:text-red-600 transition text-sm"
+                          className="text-slate-400 hover:text-red-600 transition"
                           title="Borrar sesión"
                         >
-                          ✕
+                          <X className="w-4 h-4" strokeWidth={2.5} />
                         </button>
                       </div>
                     </div>
@@ -1365,7 +1428,7 @@ export default function Dashboard() {
             >
               <div className="text-center mb-6">
                 <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full mb-4">
-                  <span className="text-3xl">✨</span>
+                  <Sparkles className="w-7 h-7 text-white" strokeWidth={2.25} />
                 </div>
                 <h3 className="font-bold text-2xl text-slate-900 mb-2">
                   Upgrade a Pro
@@ -1424,7 +1487,7 @@ export default function Dashboard() {
             <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-lg w-full shadow-2xl">
               <div className="text-center mb-5">
                 <div className="inline-flex items-center justify-center w-14 h-14 bg-emerald-100 rounded-full mb-3">
-                  <span className="text-3xl">⏱</span>
+                  <CheckCircle2 className="w-7 h-7 text-emerald-600" strokeWidth={2.25} />
                 </div>
                 <h3 className="font-bold text-2xl text-slate-900 mb-1">
                   ¡Sesión completada!
@@ -1448,8 +1511,9 @@ export default function Dashboard() {
                   autoFocus
                   className="w-full px-4 py-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition resize-none text-sm"
                 />
-                <p className="text-xs text-slate-500 mt-2">
-                  💡 Las notas aparecerán en tus informes y facturas.
+                <p className="text-xs text-slate-500 mt-2 inline-flex items-start gap-1.5">
+                  <Lightbulb className="w-3.5 h-3.5 flex-shrink-0 text-blue-600 mt-0.5" strokeWidth={2.25} />
+                  Las notas aparecerán en tus informes y facturas.
                 </p>
               </div>
 
