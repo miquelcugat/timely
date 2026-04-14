@@ -24,10 +24,11 @@ const EMPTY_PROFILE = {
   default_irpf_rate: 15,
   default_payment_terms: 'Pago a 30 días por transferencia bancaria.',
   invoice_footer: '',
+  monthly_income_goal: '',
+  hourly_rate_goal: '',
   logo_url: '',
 };
 
-// Required fields for invoicing
 const REQUIRED_FIELDS = ['legal_name', 'tax_id', 'address', 'postal_code', 'city'];
 
 export default function Account() {
@@ -38,19 +39,16 @@ export default function Account() {
 
   const { subscription, plan, isPro, loading: planLoading } = usePlan(user?.id);
 
-  // Fiscal profile
   const [profile, setProfile] = useState(EMPTY_PROFILE);
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
-  // Toast
   const [toast, setToast] = useState(null);
   const showToast = useCallback((type, msg) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3500);
   }, []);
 
-  // ---------- Auth & data load ----------
   useEffect(() => {
     const init = async () => {
       const { data } = await supabase.auth.getSession();
@@ -97,15 +95,16 @@ export default function Account() {
             data.default_payment_terms ||
             'Pago a 30 días por transferencia bancaria.',
           invoice_footer: data.invoice_footer || '',
+          monthly_income_goal: data.monthly_income_goal ?? '',
+          hourly_rate_goal: data.hourly_rate_goal ?? '',
           logo_url: data.logo_url || '',
         });
       } else {
-        // No profile yet — pre-fill email from auth
         setProfile((prev) => ({ ...prev, email: userEmail || '' }));
       }
     } catch (error) {
       console.error('Error loading profile:', error);
-      showToast('error', 'Error cargando los datos fiscales');
+      showToast('error', 'Error cargando los datos');
     }
   };
 
@@ -119,7 +118,6 @@ export default function Account() {
       const payload = {
         user_id: user.id,
         ...profile,
-        // Trim strings, convert empty to null
         legal_name: profile.legal_name.trim() || null,
         tax_id: profile.tax_id.trim() || null,
         trade_name: profile.trade_name.trim() || null,
@@ -136,6 +134,14 @@ export default function Account() {
         invoice_prefix: profile.invoice_prefix.trim() || null,
         default_payment_terms: profile.default_payment_terms.trim() || null,
         invoice_footer: profile.invoice_footer.trim() || null,
+        monthly_income_goal:
+          profile.monthly_income_goal === '' || profile.monthly_income_goal == null
+            ? null
+            : Number(profile.monthly_income_goal),
+        hourly_rate_goal:
+          profile.hourly_rate_goal === '' || profile.hourly_rate_goal == null
+            ? null
+            : Number(profile.hourly_rate_goal),
         logo_url: profile.logo_url || null,
       };
 
@@ -144,7 +150,7 @@ export default function Account() {
         .upsert(payload, { onConflict: 'user_id' });
       if (error) throw error;
 
-      showToast('success', 'Datos fiscales guardados');
+      showToast('success', 'Datos guardados');
     } catch (error) {
       console.error('Error saving profile:', error);
       showToast('error', 'No se pudo guardar');
@@ -153,7 +159,6 @@ export default function Account() {
     }
   };
 
-  // ---------- Logo upload ----------
   const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -168,7 +173,6 @@ export default function Account() {
       const ext = file.name.split('.').pop();
       const fileName = `${user.id}/logo-${Date.now()}.${ext}`;
 
-      // Delete old logo first if exists
       if (profile.logo_url) {
         try {
           const oldPath = profile.logo_url.split('/logos/')[1];
@@ -193,7 +197,6 @@ export default function Account() {
       const publicUrl = publicData.publicUrl;
       setProfile((prev) => ({ ...prev, logo_url: publicUrl }));
 
-      // Persist immediately
       await supabase
         .from('freelancer_profile')
         .upsert(
@@ -234,7 +237,6 @@ export default function Account() {
     }
   };
 
-  // ---------- Stripe ----------
   const openPortal = async () => {
     setOpening(true);
     try {
@@ -279,7 +281,6 @@ export default function Account() {
     );
   }
 
-  // Compute fiscal completeness
   const missingFields = REQUIRED_FIELDS.filter((f) => !profile[f]?.trim());
   const isProfileComplete = missingFields.length === 0;
 
@@ -310,7 +311,6 @@ export default function Account() {
         <main className="max-w-4xl mx-auto px-6 py-10">
           <h1 className="text-3xl font-bold text-slate-900 mb-8">Mi cuenta</h1>
 
-          {/* Profile basic */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
             <h2 className="text-lg font-bold text-slate-900 mb-4">Cuenta</h2>
             <div className="space-y-2">
@@ -327,7 +327,6 @@ export default function Account() {
             </div>
           </div>
 
-          {/* Subscription */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
             <h2 className="text-lg font-bold text-slate-900 mb-4">Suscripción</h2>
 
@@ -384,10 +383,9 @@ export default function Account() {
             )}
           </div>
 
-          {/* ---------- FISCAL PROFILE ---------- */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
             <div className="flex items-start justify-between gap-3 mb-1">
-              <h2 className="text-lg font-bold text-slate-900">Datos fiscales</h2>
+              <h2 className="text-lg font-bold text-slate-900">Datos fiscales y objetivos</h2>
               {isProfileComplete ? (
                 <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full">
                   ✓ Completo
@@ -399,8 +397,8 @@ export default function Account() {
               )}
             </div>
             <p className="text-sm text-slate-500 mb-5">
-              Estos datos aparecerán en la cabecera de cada factura que generes.
-              Asegúrate de que son correctos y reales.
+              Estos datos aparecerán en la cabecera de cada factura. Los objetivos te
+              ayudan a saber si estás ganando lo que realmente quieres.
             </p>
 
             {!isProfileComplete && (
@@ -413,9 +411,8 @@ export default function Account() {
               </div>
             )}
 
-            {/* Group A: Identity */}
             <FormGroup title="Identidad fiscal">
-              <Field label="Nombre legal o razón social *" required>
+              <Field label="Nombre legal o razón social *">
                 <input
                   type="text"
                   value={profile.legal_name}
@@ -425,7 +422,7 @@ export default function Account() {
                 />
               </Field>
               <div className="grid sm:grid-cols-2 gap-4">
-                <Field label="NIF / CIF *" required>
+                <Field label="NIF / CIF *">
                   <input
                     type="text"
                     value={profile.tax_id}
@@ -439,16 +436,15 @@ export default function Account() {
                     type="text"
                     value={profile.trade_name}
                     onChange={(e) => updateField('trade_name', e.target.value)}
-                    placeholder="Frenza Studio (opcional)"
+                    placeholder="Valopo Studio (opcional)"
                     className="form-input"
                   />
                 </Field>
               </div>
             </FormGroup>
 
-            {/* Group B: Address */}
             <FormGroup title="Dirección fiscal">
-              <Field label="Dirección *" required>
+              <Field label="Dirección *">
                 <input
                   type="text"
                   value={profile.address}
@@ -458,7 +454,7 @@ export default function Account() {
                 />
               </Field>
               <div className="grid sm:grid-cols-3 gap-4">
-                <Field label="Código postal *" required>
+                <Field label="Código postal *">
                   <input
                     type="text"
                     value={profile.postal_code}
@@ -467,7 +463,7 @@ export default function Account() {
                     className="form-input"
                   />
                 </Field>
-                <Field label="Ciudad *" required>
+                <Field label="Ciudad *">
                   <input
                     type="text"
                     value={profile.city}
@@ -496,7 +492,6 @@ export default function Account() {
               </Field>
             </FormGroup>
 
-            {/* Group C: Contact */}
             <FormGroup title="Contacto">
               <div className="grid sm:grid-cols-2 gap-4">
                 <Field label="Email de contacto">
@@ -529,7 +524,6 @@ export default function Account() {
               </Field>
             </FormGroup>
 
-            {/* Group D: Bank */}
             <FormGroup title="Datos bancarios">
               <Field label="IBAN">
                 <input
@@ -551,7 +545,6 @@ export default function Account() {
               </Field>
             </FormGroup>
 
-            {/* Group E: Invoice config */}
             <FormGroup title="Configuración de facturas">
               <div className="grid sm:grid-cols-3 gap-4">
                 <Field label="Prefijo de numeración">
@@ -609,7 +602,57 @@ export default function Account() {
               </Field>
             </FormGroup>
 
-            {/* Group F: Logo */}
+            {/* NEW: Goals section */}
+            <FormGroup title="Tus objetivos">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-2">
+                <p className="text-sm text-blue-900">
+                  💡 Valopo usa estos objetivos para decirte si estás ganando lo que
+                  realmente quieres, proyecto a proyecto.
+                </p>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="Objetivo €/hora">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={profile.hourly_rate_goal}
+                      onChange={(e) =>
+                        updateField('hourly_rate_goal', e.target.value)
+                      }
+                      placeholder="50"
+                      className="form-input tabular-nums pr-12"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-semibold pointer-events-none">
+                      €/h
+                    </span>
+                  </div>
+                </Field>
+                <Field label="Objetivo mensual (facturación)">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={profile.monthly_income_goal}
+                      onChange={(e) =>
+                        updateField('monthly_income_goal', e.target.value)
+                      }
+                      placeholder="3000"
+                      className="form-input tabular-nums pr-12"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-semibold pointer-events-none">
+                      €/mes
+                    </span>
+                  </div>
+                </Field>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Puedes dejarlos vacíos si no los usas. Cambiarlos cuando quieras.
+              </p>
+            </FormGroup>
+
             <FormGroup title="Logo">
               <div className="flex items-center gap-4 flex-wrap">
                 {profile.logo_url ? (
@@ -658,19 +701,17 @@ export default function Account() {
               </p>
             </FormGroup>
 
-            {/* Save button */}
             <div className="mt-6 pt-6 border-t border-slate-100">
               <button
                 onClick={saveProfile}
                 disabled={savingProfile}
                 className="w-full sm:w-auto px-8 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 active:scale-[0.99] transition disabled:opacity-60"
               >
-                {savingProfile ? 'Guardando…' : 'Guardar datos fiscales'}
+                {savingProfile ? 'Guardando…' : 'Guardar cambios'}
               </button>
             </div>
           </div>
 
-          {/* What Pro includes */}
           {!isPro && (
             <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl p-6">
               <h3 className="text-lg font-bold mb-4">Pro incluye</h3>
@@ -685,7 +726,6 @@ export default function Account() {
           )}
         </main>
 
-        {/* Toast */}
         {toast && (
           <div
             className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-lg shadow-lg font-semibold text-sm ${
@@ -699,7 +739,6 @@ export default function Account() {
         )}
       </div>
 
-      {/* Shared input class via inline style helper */}
       <style jsx>{`
         :global(.form-input) {
           width: 100%;
@@ -720,7 +759,6 @@ export default function Account() {
   );
 }
 
-// ---------- Subcomponents ----------
 function FormGroup({ title, children }) {
   return (
     <div className="mb-6 pb-6 border-b border-slate-100 last:border-0 last:pb-0 last:mb-0">
@@ -732,7 +770,7 @@ function FormGroup({ title, children }) {
   );
 }
 
-function Field({ label, children, required }) {
+function Field({ label, children }) {
   return (
     <div>
       <label className="block text-xs font-semibold text-slate-600 mb-1.5">
