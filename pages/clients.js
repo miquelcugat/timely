@@ -211,7 +211,7 @@ export default function Clients() {
   return (
     <>
       <Head>
-        <title>Mis clientes · Timely</title>
+        <title>Mis clientes · Valopo</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
@@ -224,7 +224,7 @@ export default function Clients() {
                 <span className="text-white font-bold text-lg">⏱</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-xl text-slate-900">Timely</span>
+                <span className="font-bold text-xl text-slate-900">Valopo</span>
                 <span
                   className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                     isPro
