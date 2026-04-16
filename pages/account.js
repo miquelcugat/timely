@@ -4,6 +4,8 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import { usePlan } from '../lib/usePlan';
+import MobileNav from '../components/MobileNav';
+import { Clock } from 'lucide-react';
 
 const EMPTY_PROFILE = {
   legal_name: '',
@@ -295,20 +297,29 @@ export default function Account() {
           <nav className="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-sm">
-                <span className="text-white font-bold text-lg">⏱</span>
+                <Clock className="w-5 h-5 text-white" strokeWidth={2.5} />
               </div>
               <span className="font-bold text-xl text-slate-900">Valopo</span>
             </div>
             <Link
               href="/dashboard"
-              className="text-sm text-slate-600 hover:bg-slate-100 px-4 py-2 rounded-lg font-medium"
+              className="hidden md:inline-flex text-sm text-slate-600 hover:bg-slate-100 px-4 py-2 rounded-lg font-medium"
             >
               ← Volver al dashboard
             </Link>
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                router.push('/');
+              }}
+              className="md:hidden px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
+            >
+              Salir
+            </button>
           </nav>
         </header>
 
-        <main className="max-w-4xl mx-auto px-6 py-10">
+        <main className="max-w-4xl mx-auto px-6 py-10 pb-24 md:pb-10">
           <h1 className="text-3xl font-bold text-slate-900 mb-8">Mi cuenta</h1>
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
@@ -728,7 +739,7 @@ export default function Account() {
 
         {toast && (
           <div
-            className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-lg shadow-lg font-semibold text-sm ${
+            className={`fixed bottom-20 md:bottom-6 right-6 z-50 px-5 py-3 rounded-lg shadow-lg font-semibold text-sm ${
               toast.type === 'success'
                 ? 'bg-emerald-600 text-white'
                 : 'bg-red-600 text-white'
@@ -737,6 +748,8 @@ export default function Account() {
             {toast.msg}
           </div>
         )}
+
+        <MobileNav />
       </div>
 
       <style jsx>{`
