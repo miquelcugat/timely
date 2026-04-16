@@ -12,10 +12,19 @@ export default async function handler(req, res) {
 
   // Auth
   const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return res.status(401).json({ error: 'No token' });
+  if (!token) return res.status(401).json({ error: 'No token provided' });
 
-  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-  if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
+  let user;
+  try {
+    const { data, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !data?.user) {
+      return res.status(401).json({ error: 'Sesión expirada. Recarga la página e inténtalo de nuevo.' });
+    }
+    user = data.user;
+  } catch (authErr) {
+    console.error('Auth error:', authErr);
+    return res.status(401).json({ error: 'Error de autenticación.' });
+  }
 
   try {
     // Check rate limit for free users
@@ -29,7 +38,6 @@ export default async function handler(req, res) {
     const isPro = !!sub;
 
     if (!isPro) {
-      // Check last analysis timestamp
       const { data: profile } = await supabaseAdmin
         .from('freelancer_profile')
         .select('last_insight_at')
@@ -50,25 +58,25 @@ export default async function handler(req, res) {
     }
 
     // Fetch all user data
-    const [
-      { data: projects },
-      { data: sessions },
-      { data: clients },
-      { data: profileData },
-    ] = await Promise.all([
+    const [projectsRes, sessionsRes, clientsRes, profileRes] = await Promise.all([
       supabaseAdmin.from('projects').select('*').eq('user_id', user.id),
       supabaseAdmin.from('sessions').select('*').eq('user_id', user.id).order('start_time', { ascending: false }).limit(500),
       supabaseAdmin.from('clients').select('*').eq('user_id', user.id),
       supabaseAdmin.from('freelancer_profile').select('hourly_rate_goal, monthly_income_goal').eq('user_id', user.id).maybeSingle(),
     ]);
 
-    if (!projects?.length) {
-      return res.status(400).json({ error: 'Necesitas al menos 1 proyecto con sesiones para generar un análisis.' });
+    const projects = projectsRes.data || [];
+    const sessions = sessionsRes.data || [];
+    const clients = clientsRes.data || [];
+    const profileData = profileRes.data;
+
+    if (projects.length === 0) {
+      return res.status(400).json({ error: 'Necesitas al menos 1 proyecto para generar un análisis. Crea tu primer proyecto en el Dashboard.' });
     }
 
-    const sessionsWithData = (sessions || []).filter(s => s.duration_seconds > 0);
-    if (sessionsWithData.length < 3) {
-      return res.status(400).json({ error: 'Necesitas al menos 3 sesiones registradas para generar un análisis útil.' });
+    const sessionsWithData = sessions.filter(s => s.duration_seconds > 0);
+    if (sessionsWithData.length < 1) {
+      return res.status(400).json({ error: 'Necesitas al menos 1 sesión registrada para generar un análisis. Usa el cronómetro del Dashboard para registrar tu trabajo.' });
     }
 
     // Build context for Claude
@@ -88,15 +96,13 @@ export default async function handler(req, res) {
       const totalEarned = projSessions.reduce((a, s) => a + Number(s.earned || 0), 0);
       const sessionCount = projSessions.length;
       const effectiveRate = totalHours > 0 ? totalEarned / totalHours : Number(p.rate) || 0;
-      const client = clients?.find(c => c.id === p.client_id);
+      const client = clients.find(c => c.id === p.client_id);
 
-      // Sessions this month
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const monthSessions = projSessions.filter(s => new Date(s.start_time) >= monthStart);
       const monthHours = monthSessions.reduce((a, s) => a + (s.duration_seconds || 0) / 3600, 0);
       const monthEarned = monthSessions.reduce((a, s) => a + Number(s.earned || 0), 0);
 
-      // Average session duration
       const avgSessionMin = sessionCount > 0 ? (totalHours * 60) / sessionCount : 0;
 
       return {
@@ -111,7 +117,7 @@ export default async function handler(req, res) {
         monthHours: Math.round(monthHours * 100) / 100,
         monthEarned: Math.round(monthEarned * 100) / 100,
       };
-    }).filter(p => p.sessionCount > 0 || p.rate > 0);
+    });
 
     // Global month stats
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -139,10 +145,10 @@ Responde SOLO con un JSON válido (sin backticks, sin markdown). El JSON debe te
 {
   "summary": "2-3 frases directas sobre la situación actual del freelancer",
   "profitable_projects": [
-    { "name": "nombre", "reason": "por qué es rentable (1 frase con datos)" }
+    { "name": "nombre del proyecto", "reason": "por qué es rentable (1 frase con datos)" }
   ],
   "problematic_projects": [
-    { "name": "nombre", "problem": "cuál es el problema concreto (1 frase con datos)" }
+    { "name": "nombre del proyecto", "problem": "cuál es el problema concreto (1 frase con datos)" }
   ],
   "alerts": [
     "alerta importante 1 (específica, con números)",
@@ -156,9 +162,16 @@ Responde SOLO con un JSON válido (sin backticks, sin markdown). El JSON debe te
   "daily_tip": "qué debería hacer HOY específicamente para mejorar su situación"
 }
 
+Si no hay proyectos problemáticos, deja el array vacío.
 Sé directo. No uses relleno. Cada punto debe incluir números reales del freelancer.
 Si no hay objetivo configurado, recomienda configurarlo como primera acción.
 Responde en español.`;
+
+    // Check API key exists
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error('ANTHROPIC_API_KEY not configured');
+      return res.status(500).json({ error: 'API key no configurada. Contacta al administrador.' });
+    }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -177,7 +190,17 @@ Responde en español.`;
     if (!response.ok) {
       const errBody = await response.text();
       console.error('Claude API error:', response.status, errBody);
-      return res.status(500).json({ error: 'Error generando el análisis. Inténtalo de nuevo.' });
+      
+      if (response.status === 401) {
+        return res.status(500).json({ error: 'API key inválida. Verifica la configuración.' });
+      }
+      if (response.status === 429) {
+        return res.status(500).json({ error: 'Demasiadas peticiones a la IA. Espera un momento e inténtalo de nuevo.' });
+      }
+      if (response.status === 529) {
+        return res.status(500).json({ error: 'El servicio de IA está sobrecargado. Inténtalo en unos minutos.' });
+      }
+      return res.status(500).json({ error: 'Error del servicio de IA. Inténtalo de nuevo en unos segundos.' });
     }
 
     const data = await response.json();
@@ -189,7 +212,7 @@ Responde en español.`;
       const clean = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
       analysis = JSON.parse(clean);
     } catch (parseErr) {
-      console.error('JSON parse error:', parseErr, 'Raw:', text);
+      console.error('JSON parse error:', parseErr.message, 'Raw text:', text.substring(0, 500));
       return res.status(500).json({ error: 'Error procesando el análisis. Inténtalo de nuevo.' });
     }
 
@@ -203,7 +226,7 @@ Responde en español.`;
 
     return res.status(200).json({ analysis, isPro });
   } catch (err) {
-    console.error('Insights error:', err);
-    return res.status(500).json({ error: 'Error interno. Inténtalo de nuevo.' });
+    console.error('Insights error:', err.message || err);
+    return res.status(500).json({ error: 'Error interno: ' + (err.message || 'desconocido') });
   }
 }
