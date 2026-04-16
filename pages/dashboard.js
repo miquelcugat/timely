@@ -945,6 +945,25 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* Insights CTA */}
+          <div
+            onClick={() => router.push('/insights')}
+            className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-5 mb-6 flex items-center justify-between gap-4 cursor-pointer hover:from-slate-800 hover:to-slate-700 transition group"
+          >
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-6 h-6 text-blue-400 group-hover:scale-110 transition-transform" strokeWidth={2.25} />
+              <div>
+                <p className="text-white font-bold text-sm">Analiza tu rentabilidad con IA</p>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  Descubre qué proyectos te compensan y cuáles te cuestan dinero.
+                </p>
+              </div>
+            </div>
+            <span className="text-slate-400 text-sm font-semibold group-hover:text-white transition whitespace-nowrap">
+              Analizar →
+            </span>
+          </div>
+
           {/* Top stats strip */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             {[
