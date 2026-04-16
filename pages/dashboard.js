@@ -4,6 +4,7 @@ import Head from 'next/head';
 import { supabase } from '../lib/supabaseClient';
 import { usePlan } from '../lib/usePlan';
 import OnboardingTour from '../components/OnboardingTour';
+import MobileNav from '../components/MobileNav';
 import {
   Clock,
   Target,
@@ -689,7 +690,7 @@ export default function Dashboard() {
   return (
     <>
       <Head>
-        <title>Dashboard · Timely</title>
+        <title>Dashboard · Valopo</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
@@ -702,7 +703,7 @@ export default function Dashboard() {
                 <Clock className="w-5 h-5 text-white" strokeWidth={2.5} />
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-xl text-slate-900">Timely</span>
+                <span className="font-bold text-xl text-slate-900">Valopo</span>
                 <span
                   className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                     isPro
@@ -720,7 +721,8 @@ export default function Dashboard() {
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2 sm:gap-4">
+            {/* Desktop nav - hidden on mobile */}
+            <div className="hidden md:flex items-center gap-2 sm:gap-4">
               <button
                 onClick={() => router.push('/projects')}
                 className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
@@ -745,7 +747,7 @@ export default function Dashboard() {
               >
                 Mi cuenta
               </button>
-              <span className="text-sm text-slate-600 hidden md:inline">{user?.email}</span>
+              <span className="text-sm text-slate-600 hidden lg:inline">{user?.email}</span>
               <button
                 onClick={async () => {
                   await supabase.auth.signOut();
@@ -756,10 +758,20 @@ export default function Dashboard() {
                 Salir
               </button>
             </div>
+            {/* Mobile: sign out button only */}
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                router.push('/');
+              }}
+              className="md:hidden px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
+            >
+              Salir
+            </button>
           </nav>
         </header>
 
-        <main className="max-w-6xl mx-auto px-6 py-8 sm:py-10">
+        <main className="max-w-6xl mx-auto px-6 py-8 sm:py-10 pb-24 md:pb-10">
           {/* ============= GOALS BLOCK (Nivel 1.5) ============= */}
           {hasAnyGoal ? (
             <div className="grid lg:grid-cols-3 gap-4 mb-6">
@@ -1371,7 +1383,7 @@ export default function Dashboard() {
                 PRO ACTIVO
               </div>
               <h3 className="text-2xl font-bold text-slate-900 mb-2">Eres miembro Pro</h3>
-              <p className="mb-5 text-slate-600">Gracias por confiar en Timely. Gestiona tu suscripción cuando quieras.</p>
+              <p className="mb-5 text-slate-600">Gracias por confiar en Valopo. Gestiona tu suscripción cuando quieras.</p>
               <button
                 onClick={openPortal}
                 disabled={opening}
@@ -1398,7 +1410,7 @@ export default function Dashboard() {
         {/* Toast */}
         {toast && (
           <div
-            className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-lg shadow-lg font-semibold text-sm ${
+            className={`fixed bottom-20 md:bottom-6 right-6 z-50 px-5 py-3 rounded-lg shadow-lg font-semibold text-sm ${
               toast.type === 'success'
                 ? 'bg-emerald-600 text-white'
                 : 'bg-red-600 text-white'
@@ -1407,6 +1419,9 @@ export default function Dashboard() {
             {toast.msg}
           </div>
         )}
+
+        {/* Mobile bottom nav */}
+        <MobileNav />
 
         {/* Confirm delete modal */}
         {confirmDelete && (
