@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { usePlan } from '../lib/usePlan';
+import MobileNav from '../components/MobileNav';
 
 export default function Projects() {
   const router = useRouter();
@@ -638,7 +639,7 @@ export default function Projects() {
               </div>
               <span className="font-bold text-xl text-slate-900">Valopo</span>
             </div>
-            <div className="flex items-center gap-2 sm:gap-4">
+            <div className="hidden md:flex items-center gap-2 sm:gap-4">
               <Link
                 href="/dashboard"
                 className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
@@ -673,10 +674,19 @@ export default function Projects() {
                 Salir
               </button>
             </div>
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                router.push('/');
+              }}
+              className="md:hidden px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
+            >
+              Salir
+            </button>
           </nav>
         </header>
 
-        <main className="max-w-6xl mx-auto px-6 py-8 sm:py-10">
+        <main className="max-w-6xl mx-auto px-6 py-8 sm:py-10 pb-24 md:pb-10">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-slate-900">Mis proyectos</h1>
             <p className="text-slate-500 mt-1">
@@ -1121,13 +1131,15 @@ export default function Projects() {
 
         {toast && (
           <div
-            className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-lg shadow-lg font-semibold text-sm ${
+            className={`fixed bottom-20 md:bottom-6 right-6 z-50 px-5 py-3 rounded-lg shadow-lg font-semibold text-sm ${
               toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
             }`}
           >
             {toast.msg}
           </div>
         )}
+
+        <MobileNav />
 
         {showUpgradeModal && (
           <div
