@@ -967,15 +967,20 @@ export default function Projects() {
                         subtitle="Últimos 30 días"
                         chartRef={dailyChartRef}
                       >
-                        <ResponsiveContainer width="100%" height={260}>
-                          <BarChart data={dailyData}>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <BarChart data={dailyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                             <XAxis
                               dataKey="label"
-                              tick={{ fontSize: 11, fill: '#64748b' }}
-                              interval={2}
+                              tick={{ fontSize: 9, fill: '#64748b' }}
+                              interval={4}
+                              tickMargin={4}
                             />
-                            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
+                            <YAxis
+                              tick={{ fontSize: 9, fill: '#64748b' }}
+                              width={35}
+                              tickMargin={2}
+                            />
                             <Tooltip
                               contentStyle={{
                                 backgroundColor: '#fff',
@@ -985,7 +990,7 @@ export default function Projects() {
                               }}
                               formatter={(v) => [`${v}h`, 'Horas']}
                             />
-                            <Bar dataKey="hours" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="hours" fill="#2563eb" radius={[3, 3, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </ChartCard>
@@ -995,11 +1000,21 @@ export default function Projects() {
                         subtitle="Últimas 12 semanas"
                         chartRef={weeklyChartRef}
                       >
-                        <ResponsiveContainer width="100%" height={260}>
-                          <LineChart data={weeklyData}>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <LineChart data={weeklyData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} />
-                            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
+                            <XAxis
+                              dataKey="label"
+                              tick={{ fontSize: 9, fill: '#64748b' }}
+                              interval={1}
+                              tickMargin={4}
+                            />
+                            <YAxis
+                              tick={{ fontSize: 9, fill: '#64748b' }}
+                              width={45}
+                              tickMargin={2}
+                              tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}
+                            />
                             <Tooltip
                               contentStyle={{
                                 backgroundColor: '#fff',
@@ -1013,9 +1028,9 @@ export default function Projects() {
                               type="monotone"
                               dataKey="earnings"
                               stroke="#10b981"
-                              strokeWidth={3}
-                              dot={{ fill: '#10b981', r: 4 }}
-                              activeDot={{ r: 6 }}
+                              strokeWidth={2.5}
+                              dot={{ fill: '#10b981', r: 3 }}
+                              activeDot={{ r: 5 }}
                             />
                           </LineChart>
                         </ResponsiveContainer>
@@ -1026,15 +1041,20 @@ export default function Projects() {
                         subtitle="Cuándo sueles trabajar"
                         chartRef={hourlyChartRef}
                       >
-                        <ResponsiveContainer width="100%" height={260}>
-                          <BarChart data={hourlyData}>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <BarChart data={hourlyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                             <XAxis
                               dataKey="hour"
-                              tick={{ fontSize: 10, fill: '#64748b' }}
-                              interval={1}
+                              tick={{ fontSize: 8, fill: '#64748b' }}
+                              interval={2}
+                              tickMargin={4}
                             />
-                            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
+                            <YAxis
+                              tick={{ fontSize: 9, fill: '#64748b' }}
+                              width={35}
+                              tickMargin={2}
+                            />
                             <Tooltip
                               contentStyle={{
                                 backgroundColor: '#fff',
@@ -1047,7 +1067,7 @@ export default function Projects() {
                             <Bar
                               dataKey="hoursWorked"
                               fill="#8b5cf6"
-                              radius={[4, 4, 0, 0]}
+                              radius={[3, 3, 0, 0]}
                             />
                           </BarChart>
                         </ResponsiveContainer>
