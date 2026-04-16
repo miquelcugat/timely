@@ -4,12 +4,14 @@ import {
   FolderKanban,
   Users,
   FileText,
+  Sparkles,
   User,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { href: '/projects', label: 'Proyectos', Icon: FolderKanban },
+  { href: '/insights', label: 'Insights', Icon: Sparkles },
   { href: '/clients', label: 'Clientes', Icon: Users },
   { href: '/invoices', label: 'Facturas', Icon: FileText },
   { href: '/account', label: 'Cuenta', Icon: User },
@@ -21,7 +23,7 @@ export default function MobileNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 md:hidden">
-      <div className="flex justify-around items-center h-16 px-2 max-w-lg mx-auto">
+      <div className="flex justify-around items-center h-16 px-1 max-w-lg mx-auto">
         {NAV_ITEMS.map(({ href, label, Icon }) => {
           const isActive = currentPath === href;
           return (
@@ -39,7 +41,7 @@ export default function MobileNav() {
                 strokeWidth={isActive ? 2.5 : 2}
               />
               <span
-                className={`text-[10px] font-semibold leading-tight ${
+                className={`text-[9px] font-semibold leading-tight ${
                   isActive ? 'text-blue-600' : 'text-slate-400'
                 }`}
               >
@@ -49,7 +51,6 @@ export default function MobileNav() {
           );
         })}
       </div>
-      {/* Safe area for phones with home indicator */}
       <div className="h-[env(safe-area-inset-bottom)]" />
     </nav>
   );
