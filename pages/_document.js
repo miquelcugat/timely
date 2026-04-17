@@ -4,9 +4,9 @@ export default function Document() {
   return (
     <Html lang="es">
       <Head>
-        <meta charSet="utf-8" />
-        <meta name="theme-color" content="#0066FF" />
-        <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/favicon.svg" />
+        <meta name="theme-color" content="#2563eb" />
       </Head>
       <body>
         <Main />
