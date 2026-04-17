@@ -702,7 +702,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-3">
               <ValopoLogo size={40} />
               <div className="flex items-center gap-2">
-                <span className="font-bold text-xl text-slate-900">Valopo</span>
+                <span className="font-bold text-xl bg-gradient-to-r from-blue-700 to-blue-500 bg-clip-text text-transparent">Valopo</span>
                 <span
                   className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                     isPro
