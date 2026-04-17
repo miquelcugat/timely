@@ -1,12 +1,6 @@
-// ============================================================
-// ⚠️ TODO ANTES DE ACTIVAR PAGOS REALES EN STRIPE:
-// Reemplaza los siguientes placeholders en este archivo:
-//   [TU NOMBRE]   → tu nombre completo
-//   [TU EMAIL]    → email de contacto operativo
-// ============================================================
-
 import Head from 'next/head';
 import Link from 'next/link';
+import { Clock } from 'lucide-react';
 
 export default function Cookies() {
   return (
@@ -21,7 +15,7 @@ export default function Cookies() {
           <nav className="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
             <Link href="/" className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-sm">
-                <span className="text-white font-bold text-lg">⏱</span>
+                <Clock className="w-5 h-5 text-white" strokeWidth={2.5} />
               </div>
               <span className="font-bold text-xl text-slate-900">Valopo</span>
             </Link>
@@ -103,7 +97,7 @@ export default function Cookies() {
                       <td className="p-3">30 minutos</td>
                     </tr>
                     <tr>
-                      <td className="p-3 font-mono text-xs">Valopo_cookies_accepted</td>
+                      <td className="p-3 font-mono text-xs">valopo_cookies_accepted</td>
                       <td className="p-3">Técnica (Valopo)</td>
                       <td className="p-3">
                         Recordar que has aceptado este aviso
@@ -205,8 +199,8 @@ export default function Cookies() {
           <div className="mt-12 pt-8 border-t border-slate-200 text-sm text-slate-500">
             <p>
               Para cualquier consulta sobre cookies, escríbenos a{' '}
-              <a href="mailto:[TU EMAIL]" className="text-blue-600 hover:underline">
-                [TU EMAIL]
+              <a href="mailto:info@valopo.com" className="text-blue-600 hover:underline">
+                info@valopo.com
               </a>
               .
             </p>
