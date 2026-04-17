@@ -1414,7 +1414,7 @@ export default function Dashboard() {
           ) : (
             <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl p-8 text-center shadow-sm">
               <h3 className="text-2xl font-bold mb-2">Upgrade a Pro</h3>
-              <p className="mb-5 text-blue-100">14,99 €/mes · Proyectos ilimitados, exportar a PDF, histórico completo</p>
+              <p className="mb-5 text-blue-100">14,99 €/mes · Proyectos ilimitados, facturación, exportar PDF, asesor IA ilimitado</p>
               <button
                 onClick={openCheckout}
                 disabled={opening}
