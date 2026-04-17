@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 import { usePlan } from '../lib/usePlan';
 import OnboardingTour from '../components/OnboardingTour';
 import MobileNav from '../components/MobileNav';
+import ValopoLogo from '../components/ValopoLogo';
 import {
   Clock,
   Target,
@@ -699,9 +700,7 @@ export default function Dashboard() {
         <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
           <nav className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-sm">
-                <Clock className="w-5 h-5 text-white" strokeWidth={2.5} />
-              </div>
+              <ValopoLogo size={40} />
               <div className="flex items-center gap-2">
                 <span className="font-bold text-xl text-slate-900">Valopo</span>
                 <span
