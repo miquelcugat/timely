@@ -93,22 +93,38 @@ export default async function handler(req, res) {
     const projectStats = projects.map(p => {
       const projSessions = sessionsWithData.filter(s => s.project_id === p.id);
       const totalHours = projSessions.reduce((a, s) => a + (s.duration_seconds || 0) / 3600, 0);
-      const totalEarned = projSessions.reduce((a, s) => a + Number(s.earned || 0), 0);
       const sessionCount = projSessions.length;
-      const effectiveRate = totalHours > 0 ? totalEarned / totalHours : Number(p.rate) || 0;
       const client = clients.find(c => c.id === p.client_id);
+      const billingType = p.billing_type || 'hourly';
+      const isFixed = billingType === 'fixed';
+
+      // For hourly: earned = sum of session earnings
+      // For fixed: earned = fixed_price (no matter how many hours)
+      const totalEarned = isFixed
+        ? Number(p.fixed_price || 0)
+        : projSessions.reduce((a, s) => a + Number(s.earned || 0), 0);
+
+      // Effective rate: always earned / hours (or rate if no hours yet)
+      const effectiveRate = totalHours > 0
+        ? totalEarned / totalHours
+        : (isFixed ? 0 : Number(p.rate) || 0);
 
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const monthSessions = projSessions.filter(s => new Date(s.start_time) >= monthStart);
       const monthHours = monthSessions.reduce((a, s) => a + (s.duration_seconds || 0) / 3600, 0);
-      const monthEarned = monthSessions.reduce((a, s) => a + Number(s.earned || 0), 0);
+      const monthEarned = isFixed
+        ? 0  // Fixed projects don't contribute to monthly earned until completed (future feature)
+        : monthSessions.reduce((a, s) => a + Number(s.earned || 0), 0);
 
       const avgSessionMin = sessionCount > 0 ? (totalHours * 60) / sessionCount : 0;
 
       return {
         name: p.name,
         client: client?.name || null,
+        billingType,
         rate: Number(p.rate) || 0,
+        fixedPrice: isFixed ? Number(p.fixed_price || 0) : null,
+        estimatedHours: p.estimated_hours ? Number(p.estimated_hours) : null,
         totalHours: Math.round(totalHours * 100) / 100,
         totalEarned: Math.round(totalEarned * 100) / 100,
         effectiveRate: Math.round(effectiveRate * 100) / 100,
@@ -137,8 +153,22 @@ Fecha actual: ${now.toLocaleDateString('es-ES')} (día ${currentDay} de ${lastDa
 Este mes lleva: ${Math.round(monthTotalHours * 100) / 100}h trabajadas, ${Math.round(monthTotalEarned * 100) / 100}€ facturados
 ${monthlyGoal ? `Progreso del mes: ${Math.round((monthTotalEarned / monthlyGoal) * 100)}% del objetivo (faltan ${Math.round((monthlyGoal - monthTotalEarned) * 100) / 100}€)` : ''}
 
+IMPORTANTE: El freelancer tiene dos tipos de proyectos:
+- "POR HORAS": cobra por hora trabajada. La tarifa es fija. Más horas = más dinero.
+- "PRECIO CERRADO": cobra un precio total fijo. Más horas trabajadas REDUCEN la rentabilidad. La métrica clave es €/h REAL (precio total / horas reales).
+
 PROYECTOS:
-${projectStats.map(p => `- "${p.name}" ${p.client ? `(cliente: ${p.client})` : ''}: tarifa ${p.rate}€/h, ${p.sessionCount} sesiones, ${p.totalHours}h totales, ${p.totalEarned}€ ganados, tarifa efectiva ${p.effectiveRate}€/h, media sesión ${p.avgSessionMin}min. Este mes: ${p.monthHours}h, ${p.monthEarned}€`).join('\n')}
+${projectStats.map(p => {
+  if (p.billingType === 'fixed') {
+    const estText = p.estimatedHours ? ` estimadas ${p.estimatedHours}h` : '';
+    const completionPct = p.estimatedHours && p.totalHours > 0
+      ? ` (${Math.round((p.totalHours / p.estimatedHours) * 100)}% de tiempo estimado consumido)`
+      : '';
+    return `- "${p.name}" ${p.client ? `(cliente: ${p.client})` : ''} [PRECIO CERRADO]: precio ${p.fixedPrice}€${estText}, ${p.sessionCount} sesiones, ${p.totalHours}h trabajadas${completionPct}, tarifa efectiva REAL ${p.effectiveRate}€/h. ${p.totalHours === 0 ? 'Todavía sin tiempo registrado.' : ''}`;
+  } else {
+    return `- "${p.name}" ${p.client ? `(cliente: ${p.client})` : ''} [POR HORAS]: tarifa ${p.rate}€/h, ${p.sessionCount} sesiones, ${p.totalHours}h totales, ${p.totalEarned}€ ganados, media sesión ${p.avgSessionMin}min. Este mes: ${p.monthHours}h, ${p.monthEarned}€`;
+  }
+}).join('\n')}
 
 INSTRUCCIONES:
 Responde SOLO con un JSON válido (sin backticks, sin markdown). El JSON debe tener esta estructura exacta:
@@ -161,6 +191,13 @@ Responde SOLO con un JSON válido (sin backticks, sin markdown). El JSON debe te
   ],
   "daily_tip": "qué debería hacer HOY específicamente para mejorar su situación"
 }
+
+IMPORTANTE sobre proyectos a PRECIO CERRADO:
+- Un proyecto de 800€ donde ha trabajado 10h sale a 80€/h efectivos → excelente si su objetivo es 60€/h
+- Un proyecto de 800€ donde ha trabajado 30h sale a 27€/h efectivos → ALERTA si su objetivo es 60€/h
+- Si la tarifa efectiva cae por debajo del objetivo, el proyecto está PERDIENDO DINERO (el tiempo invertido no se está pagando a su valor)
+- Si supera el estimado de horas, avisa: "llevas X% más tiempo del estimado, tu rentabilidad está cayendo"
+- Si todavía no tiene horas registradas, no lo clasifiques como rentable/problemático. Sugiere registrar tiempo.
 
 Si no hay proyectos problemáticos, deja el array vacío.
 Sé directo. No uses relleno. Cada punto debe incluir números reales del freelancer.
