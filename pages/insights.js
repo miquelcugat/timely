@@ -1,346 +1,269 @@
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
-import Head from 'next/head';
-import Link from 'next/link';
-import ValopoLogo from '../components/ValopoLogo';
-import { supabase } from '../lib/supabaseClient';
-import { usePlan } from '../lib/usePlan';
-import MobileNav from '../components/MobileNav';
-import {
-  Clock,
-  Sparkles,
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
-  Lightbulb,
-  CheckCircle2,
-  Zap,
-  RefreshCw,
-  Lock,
-} from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
 
-export default function Insights() {
-  const router = useRouter();
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState(null);
-  const [error, setError] = useState(null);
-  const [isPro, setIsPro] = useState(false);
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-  const { isPro: planPro, loading: planLoading } = usePlan(user?.id);
-
-  useEffect(() => {
-    const init = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        router.push('/login');
-        return;
-      }
-      setUser(data.session.user);
-      setLoading(false);
-    };
-    init();
-  }, [router]);
-
-  useEffect(() => {
-    if (!planLoading) setIsPro(planPro);
-  }, [planPro, planLoading]);
-
-  const runAnalysis = async () => {
-    setAnalyzing(true);
-    setError(null);
-    setAnalysis(null);
-
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const res = await fetch('/api/insights', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${sessionData.session.access_token}`,
-        },
-      });
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        setError(json.error || 'Error generando el análisis');
-        return;
-      }
-
-      setAnalysis(json.analysis);
-      setIsPro(json.isPro);
-    } catch (err) {
-      console.error('Analysis error:', err);
-      setError('Error de conexión. Inténtalo de nuevo.');
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
-  if (loading || planLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-slate-600">Cargando…</div>
-      </div>
-    );
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  return (
-    <>
-      <Head>
-        <title>Insights IA · Valopo</title>
-      </Head>
+  // Auth
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'No token provided' });
 
-      <div className="min-h-screen bg-slate-50">
-        <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
-          <nav className="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <ValopoLogo size={40} />
-              <span className="font-bold text-xl bg-gradient-to-r from-blue-700 to-blue-500 bg-clip-text text-transparent">Valopo</span>
-            </div>
-            <div className="hidden md:flex items-center gap-4">
-              <Link
-                href="/dashboard"
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
-              >
-                Dashboard
-              </Link>
-              <Link
-                href="/projects"
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
-              >
-                Proyectos
-              </Link>
-              <Link
-                href="/insights"
-                className="px-4 py-2 text-sm bg-blue-50 text-blue-700 rounded-lg font-semibold"
-              >
-                Insights
-              </Link>
-              <button
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  router.push('/');
-                }}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
-              >
-                Salir
-              </button>
-            </div>
-            <button
-              onClick={async () => {
-                await supabase.auth.signOut();
-                router.push('/');
-              }}
-              className="md:hidden px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
-            >
-              Salir
-            </button>
-          </nav>
-        </header>
+  let user;
+  try {
+    const { data, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !data?.user) {
+      return res.status(401).json({ error: 'Sesión expirada. Recarga la página e inténtalo de nuevo.' });
+    }
+    user = data.user;
+  } catch (authErr) {
+    console.error('Auth error:', authErr);
+    return res.status(401).json({ error: 'Error de autenticación.' });
+  }
 
-        <main className="max-w-5xl mx-auto px-6 py-8 sm:py-10 pb-24 md:pb-10">
-          {/* Page header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-2">
-              <Sparkles className="w-7 h-7 text-blue-600" strokeWidth={2.25} />
-              <h1 className="text-3xl font-bold text-slate-900">Insights IA</h1>
-            </div>
-            <p className="text-slate-500">
-              Tu asesor financiero analiza tus datos reales y te dice exactamente
-              qué hacer para ganar más.
-            </p>
-            {!isPro && (
-              <p className="text-xs text-slate-400 mt-2">
-                Plan Free: 1 análisis al día. Pro: análisis ilimitados.
-              </p>
-            )}
-          </div>
+  try {
+    // Check rate limit for free users
+    const { data: sub } = await supabaseAdmin
+      .from('subscriptions')
+      .select('status')
+      .eq('user_id', user.id)
+      .in('status', ['active', 'trialing'])
+      .maybeSingle();
 
-          {/* CTA or results */}
-          {!analysis && !analyzing && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 sm:p-12 text-center">
-              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <Sparkles className="w-8 h-8 text-blue-600" strokeWidth={2} />
-              </div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-3">
-                Analiza tu rentabilidad
-              </h2>
-              <p className="text-slate-600 max-w-lg mx-auto mb-8">
-                Valopo analizará tus proyectos, sesiones e ingresos para decirte
-                qué proyectos son rentables, cuáles no, y qué deberías hacer hoy.
-              </p>
+    const isPro = !!sub;
 
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 max-w-lg mx-auto text-left">
-                  <p className="text-sm text-red-800">{error}</p>
-                  {error.includes('Upgrade') && (
-                    <button
-                      onClick={() => router.push('/account')}
-                      className="mt-2 text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1"
-                    >
-                      <Lock className="w-3 h-3" strokeWidth={2.5} />
-                      Upgrade a Pro
-                    </button>
-                  )}
-                </div>
-              )}
+    if (!isPro) {
+      const { data: profile } = await supabaseAdmin
+        .from('freelancer_profile')
+        .select('last_insight_at')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-              <button
-                onClick={runAnalysis}
-                className="px-8 py-4 bg-blue-600 text-white rounded-lg font-bold text-lg hover:bg-blue-700 transition shadow-sm inline-flex items-center gap-2"
-              >
-                <Sparkles className="w-5 h-5" strokeWidth={2.5} />
-                Analizar mi rentabilidad
-              </button>
-            </div>
-          )}
+      if (profile?.last_insight_at) {
+        const lastAt = new Date(profile.last_insight_at);
+        const now = new Date();
+        const hoursSince = (now - lastAt) / (1000 * 60 * 60);
+        if (hoursSince < 24) {
+          const hoursLeft = Math.ceil(24 - hoursSince);
+          return res.status(429).json({
+            error: `Plan Free: 1 análisis al día. Próximo disponible en ${hoursLeft}h. Upgrade a Pro para análisis ilimitados.`,
+          });
+        }
+      }
+    }
 
-          {/* Loading state */}
-          {analyzing && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 text-center">
-              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" strokeWidth={2} />
-              </div>
-              <h2 className="text-xl font-bold text-slate-900 mb-2">
-                Analizando tu rentabilidad…
-              </h2>
-              <p className="text-slate-500">
-                Revisando tus proyectos, sesiones e ingresos. Esto tarda unos segundos.
-              </p>
-            </div>
-          )}
+    // Fetch all user data
+    const [projectsRes, sessionsRes, clientsRes, profileRes] = await Promise.all([
+      supabaseAdmin.from('projects').select('*').eq('user_id', user.id),
+      supabaseAdmin.from('sessions').select('*').eq('user_id', user.id).order('start_time', { ascending: false }).limit(500),
+      supabaseAdmin.from('clients').select('*').eq('user_id', user.id),
+      supabaseAdmin.from('freelancer_profile').select('hourly_rate_goal, monthly_income_goal').eq('user_id', user.id).maybeSingle(),
+    ]);
 
-          {/* Results */}
-          {analysis && (
-            <div className="space-y-6">
-              {/* Summary */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                <div className="flex items-start gap-3 mb-4">
-                  <Sparkles className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" strokeWidth={2.25} />
-                  <div>
-                    <h2 className="font-bold text-lg text-slate-900">Resumen</h2>
-                    <p className="text-slate-600 mt-2 leading-relaxed">{analysis.summary}</p>
-                  </div>
-                </div>
-              </div>
+    const projects = projectsRes.data || [];
+    const sessions = sessionsRes.data || [];
+    const clients = clientsRes.data || [];
+    const profileData = profileRes.data;
 
-              {/* Daily tip */}
-              {analysis.daily_tip && (
-                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
-                  <div className="flex items-start gap-3">
-                    <Zap className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" strokeWidth={2.25} />
-                    <div>
-                      <h2 className="font-bold text-blue-900">Qué hacer hoy</h2>
-                      <p className="text-blue-900 mt-1 text-sm leading-relaxed opacity-90">
-                        {analysis.daily_tip}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+    if (projects.length === 0) {
+      return res.status(400).json({ error: 'Necesitas al menos 1 proyecto para generar un análisis. Crea tu primer proyecto en el Dashboard.' });
+    }
 
-              {/* Two columns: profitable + problematic */}
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Profitable */}
-                {analysis.profitable_projects?.length > 0 && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <TrendingUp className="w-5 h-5 text-emerald-600" strokeWidth={2.25} />
-                      <h2 className="font-bold text-emerald-900">Proyectos rentables</h2>
-                    </div>
-                    <div className="space-y-3">
-                      {analysis.profitable_projects.map((p, i) => (
-                        <div key={i} className="bg-white/60 rounded-lg p-3">
-                          <p className="font-semibold text-emerald-900 text-sm">{p.name}</p>
-                          <p className="text-emerald-800 text-xs mt-1 leading-relaxed opacity-80">
-                            {p.reason}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+    const sessionsWithData = sessions.filter(s => s.duration_seconds > 0);
+    if (sessionsWithData.length < 1) {
+      return res.status(400).json({ error: 'Necesitas al menos 1 sesión registrada para generar un análisis. Usa el cronómetro del Dashboard para registrar tu trabajo.' });
+    }
 
-                {/* Problematic */}
-                {analysis.problematic_projects?.length > 0 && (
-                  <div className="bg-red-50 border border-red-200 rounded-2xl p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <TrendingDown className="w-5 h-5 text-red-600" strokeWidth={2.25} />
-                      <h2 className="font-bold text-red-900">Proyectos problemáticos</h2>
-                    </div>
-                    <div className="space-y-3">
-                      {analysis.problematic_projects.map((p, i) => (
-                        <div key={i} className="bg-white/60 rounded-lg p-3">
-                          <p className="font-semibold text-red-900 text-sm">{p.name}</p>
-                          <p className="text-red-800 text-xs mt-1 leading-relaxed opacity-80">
-                            {p.problem}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+    // Build context for Claude
+    const hourlyGoal = profileData?.hourly_rate_goal || null;
+    const monthlyGoal = profileData?.monthly_income_goal || null;
 
-              {/* Alerts */}
-              {analysis.alerts?.length > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <AlertTriangle className="w-5 h-5 text-amber-600" strokeWidth={2.25} />
-                    <h2 className="font-bold text-amber-900">Alertas</h2>
-                  </div>
-                  <div className="space-y-2">
-                    {analysis.alerts.map((alert, i) => (
-                      <div key={i} className="flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0 mt-2" />
-                        <p className="text-amber-900 text-sm leading-relaxed">{alert}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+    const now = new Date();
+    const currentDay = now.getDate();
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const daysLeft = lastDay - currentDay;
+    const monthName = now.toLocaleDateString('es-ES', { month: 'long' });
 
-              {/* Recommendations */}
-              {analysis.recommendations?.length > 0 && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Lightbulb className="w-5 h-5 text-blue-600" strokeWidth={2.25} />
-                    <h2 className="font-bold text-slate-900">Recomendaciones</h2>
-                  </div>
-                  <div className="space-y-3">
-                    {analysis.recommendations.map((rec, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" strokeWidth={2.5} />
-                        <p className="text-slate-700 text-sm leading-relaxed">{rec}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+    // Aggregate per project
+    const projectStats = projects.map(p => {
+      const projSessions = sessionsWithData.filter(s => s.project_id === p.id);
+      const totalHours = projSessions.reduce((a, s) => a + (s.duration_seconds || 0) / 3600, 0);
+      const sessionCount = projSessions.length;
+      const client = clients.find(c => c.id === p.client_id);
+      const billingType = p.billing_type || 'hourly';
+      const isFixed = billingType === 'fixed';
 
-              {/* Analyze again */}
-              <div className="text-center pt-4">
-                <button
-                  onClick={runAnalysis}
-                  className="px-6 py-3 bg-slate-100 text-slate-700 rounded-lg font-semibold hover:bg-slate-200 transition inline-flex items-center gap-2"
-                >
-                  <RefreshCw className="w-4 h-4" strokeWidth={2.5} />
-                  Analizar de nuevo
-                </button>
-                {!isPro && (
-                  <p className="text-xs text-slate-400 mt-3">
-                    Free: 1 análisis al día. Upgrade a Pro para análisis ilimitados.
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-        </main>
+      // For hourly: earned = sum of session earnings
+      // For fixed: earned = fixed_price (no matter how many hours)
+      const totalEarned = isFixed
+        ? Number(p.fixed_price || 0)
+        : projSessions.reduce((a, s) => a + Number(s.earned || 0), 0);
 
-        <MobileNav />
-      </div>
-    </>
-  );
+      // Effective rate: always earned / hours (or rate if no hours yet)
+      const effectiveRate = totalHours > 0
+        ? totalEarned / totalHours
+        : (isFixed ? 0 : Number(p.rate) || 0);
+
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthSessions = projSessions.filter(s => new Date(s.start_time) >= monthStart);
+      const monthHours = monthSessions.reduce((a, s) => a + (s.duration_seconds || 0) / 3600, 0);
+      const monthEarned = isFixed
+        ? 0  // Fixed projects don't contribute to monthly earned until completed (future feature)
+        : monthSessions.reduce((a, s) => a + Number(s.earned || 0), 0);
+
+      const avgSessionMin = sessionCount > 0 ? (totalHours * 60) / sessionCount : 0;
+
+      return {
+        name: p.name,
+        client: client?.name || null,
+        billingType,
+        rate: Number(p.rate) || 0,
+        fixedPrice: isFixed ? Number(p.fixed_price || 0) : null,
+        estimatedHours: p.estimated_hours ? Number(p.estimated_hours) : null,
+        totalHours: Math.round(totalHours * 100) / 100,
+        totalEarned: Math.round(totalEarned * 100) / 100,
+        effectiveRate: Math.round(effectiveRate * 100) / 100,
+        sessionCount,
+        avgSessionMin: Math.round(avgSessionMin),
+        monthHours: Math.round(monthHours * 100) / 100,
+        monthEarned: Math.round(monthEarned * 100) / 100,
+      };
+    });
+
+    // Global month stats
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthSessions = sessionsWithData.filter(s => new Date(s.start_time) >= monthStart);
+    const monthTotalHours = monthSessions.reduce((a, s) => a + (s.duration_seconds || 0) / 3600, 0);
+    const monthTotalEarned = monthSessions.reduce((a, s) => a + Number(s.earned || 0), 0);
+
+    const prompt = `Eres un asesor financiero experto en negocio freelance. Analizas los datos REALES del freelancer y das consejos directos, específicos y accionables. No des consejos genéricos. Basa todo en los números.
+
+DATOS DEL FREELANCER:
+
+Objetivo €/hora: ${hourlyGoal ? hourlyGoal + ' €/h' : 'No configurado'}
+Objetivo mensual: ${monthlyGoal ? monthlyGoal + ' €/mes' : 'No configurado'}
+
+Fecha actual: ${now.toLocaleDateString('es-ES')} (día ${currentDay} de ${lastDay}, quedan ${daysLeft} días en ${monthName})
+
+Este mes lleva: ${Math.round(monthTotalHours * 100) / 100}h trabajadas, ${Math.round(monthTotalEarned * 100) / 100}€ facturados
+${monthlyGoal ? `Progreso del mes: ${Math.round((monthTotalEarned / monthlyGoal) * 100)}% del objetivo (faltan ${Math.round((monthlyGoal - monthTotalEarned) * 100) / 100}€)` : ''}
+
+IMPORTANTE: El freelancer tiene dos tipos de proyectos:
+- "POR HORAS": cobra por hora trabajada. La tarifa es fija. Más horas = más dinero.
+- "PRECIO CERRADO": cobra un precio total fijo. Más horas trabajadas REDUCEN la rentabilidad. La métrica clave es €/h REAL (precio total / horas reales).
+
+PROYECTOS:
+${projectStats.map(p => {
+  if (p.billingType === 'fixed') {
+    const estText = p.estimatedHours ? ` estimadas ${p.estimatedHours}h` : '';
+    const completionPct = p.estimatedHours && p.totalHours > 0
+      ? ` (${Math.round((p.totalHours / p.estimatedHours) * 100)}% de tiempo estimado consumido)`
+      : '';
+    return `- "${p.name}" ${p.client ? `(cliente: ${p.client})` : ''} [PRECIO CERRADO]: precio ${p.fixedPrice}€${estText}, ${p.sessionCount} sesiones, ${p.totalHours}h trabajadas${completionPct}, tarifa efectiva REAL ${p.effectiveRate}€/h. ${p.totalHours === 0 ? 'Todavía sin tiempo registrado.' : ''}`;
+  } else {
+    return `- "${p.name}" ${p.client ? `(cliente: ${p.client})` : ''} [POR HORAS]: tarifa ${p.rate}€/h, ${p.sessionCount} sesiones, ${p.totalHours}h totales, ${p.totalEarned}€ ganados, media sesión ${p.avgSessionMin}min. Este mes: ${p.monthHours}h, ${p.monthEarned}€`;
+  }
+}).join('\n')}
+
+INSTRUCCIONES:
+Responde SOLO con un JSON válido (sin backticks, sin markdown). El JSON debe tener esta estructura exacta:
+{
+  "summary": "2-3 frases directas sobre la situación actual del freelancer",
+  "profitable_projects": [
+    { "name": "nombre del proyecto", "reason": "por qué es rentable (1 frase con datos)" }
+  ],
+  "problematic_projects": [
+    { "name": "nombre del proyecto", "problem": "cuál es el problema concreto (1 frase con datos)" }
+  ],
+  "alerts": [
+    "alerta importante 1 (específica, con números)",
+    "alerta importante 2"
+  ],
+  "recommendations": [
+    "recomendación concreta y accionable 1",
+    "recomendación concreta y accionable 2",
+    "recomendación concreta y accionable 3"
+  ],
+  "daily_tip": "qué debería hacer HOY específicamente para mejorar su situación"
+}
+
+IMPORTANTE sobre proyectos a PRECIO CERRADO:
+- Un proyecto de 800€ donde ha trabajado 10h sale a 80€/h efectivos → excelente si su objetivo es 60€/h
+- Un proyecto de 800€ donde ha trabajado 30h sale a 27€/h efectivos → ALERTA si su objetivo es 60€/h
+- Si la tarifa efectiva cae por debajo del objetivo, el proyecto está PERDIENDO DINERO (el tiempo invertido no se está pagando a su valor)
+- Si supera el estimado de horas, avisa: "llevas X% más tiempo del estimado, tu rentabilidad está cayendo"
+- Si todavía no tiene horas registradas, no lo clasifiques como rentable/problemático. Sugiere registrar tiempo.
+
+Si no hay proyectos problemáticos, deja el array vacío.
+Sé directo. No uses relleno. Cada punto debe incluir números reales del freelancer.
+Si no hay objetivo configurado, recomienda configurarlo como primera acción.
+Responde en español.`;
+
+    // Check API key exists
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error('ANTHROPIC_API_KEY not configured');
+      return res.status(500).json({ error: 'API key no configurada. Contacta al administrador.' });
+    }
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1500,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.error('Claude API error:', response.status, errBody);
+      
+      if (response.status === 401) {
+        return res.status(500).json({ error: 'API key inválida. Verifica la configuración.' });
+      }
+      if (response.status === 429) {
+        return res.status(500).json({ error: 'Demasiadas peticiones a la IA. Espera un momento e inténtalo de nuevo.' });
+      }
+      if (response.status === 529) {
+        return res.status(500).json({ error: 'El servicio de IA está sobrecargado. Inténtalo en unos minutos.' });
+      }
+      return res.status(500).json({ error: 'Error del servicio de IA. Inténtalo de nuevo en unos segundos.' });
+    }
+
+    const data = await response.json();
+    const text = data.content?.[0]?.text || '';
+
+    // Parse JSON response
+    let analysis;
+    try {
+      const clean = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      analysis = JSON.parse(clean);
+    } catch (parseErr) {
+      console.error('JSON parse error:', parseErr.message, 'Raw text:', text.substring(0, 500));
+      return res.status(500).json({ error: 'Error procesando el análisis. Inténtalo de nuevo.' });
+    }
+
+    // Save timestamp for rate limiting
+    await supabaseAdmin
+      .from('freelancer_profile')
+      .upsert(
+        { user_id: user.id, last_insight_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      );
+
+    return res.status(200).json({ analysis, isPro });
+  } catch (err) {
+    console.error('Insights error:', err.message || err);
+    return res.status(500).json({ error: 'Error interno: ' + (err.message || 'desconocido') });
+  }
 }
