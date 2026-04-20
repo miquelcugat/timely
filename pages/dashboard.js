@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [clients, setClients] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeProject, setActiveProject] = useState('');
 
@@ -71,6 +72,16 @@ export default function Dashboard() {
   const [manualMinutes, setManualMinutes] = useState('');
   const [manualNotes, setManualNotes] = useState('');
   const [savingManual, setSavingManual] = useState(false);
+
+  // Expense modal
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false);
+  const [expenseProjectId, setExpenseProjectId] = useState('');
+  const [expenseDescription, setExpenseDescription] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [expenseNotes, setExpenseNotes] = useState('');
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [expensesListOpen, setExpensesListOpen] = useState(null); // projectId whose expenses are shown
 
   // Toast
   const [toast, setToast] = useState(null);
@@ -165,6 +176,7 @@ export default function Dashboard() {
         { data: sessionsData, error: sErr },
         { data: clientsData, error: cErr },
         { data: profileData },
+        { data: expensesData },
       ] = await Promise.all([
         supabase
           .from('projects')
@@ -186,6 +198,11 @@ export default function Dashboard() {
           .select('onboarded_at, monthly_income_goal, hourly_rate_goal')
           .eq('user_id', userId)
           .maybeSingle(),
+        supabase
+          .from('project_expenses')
+          .select('*')
+          .eq('user_id', userId)
+          .order('expense_date', { ascending: false }),
       ]);
 
       if (pErr) throw pErr;
@@ -196,6 +213,7 @@ export default function Dashboard() {
       setSessions(sessionsData || []);
       setClients(clientsData || []);
       setProfile(profileData || null);
+      setExpenses(expensesData || []);
 
       // Detect if onboarding should be shown
       const hasNoProjects = (projectsData || []).length === 0;
@@ -460,6 +478,77 @@ export default function Dashboard() {
       showToast('error', 'No se pudo guardar la sesión');
     } finally {
       setSavingManual(false);
+    }
+  };
+
+  const openExpenseModal = (projectId) => {
+    setExpenseProjectId(projectId || '');
+    setExpenseDescription('');
+    setExpenseAmount('');
+    setExpenseDate(new Date().toISOString().slice(0, 10));
+    setExpenseNotes('');
+    setExpenseModalOpen(true);
+  };
+
+  const saveExpense = async () => {
+    if (!expenseProjectId) {
+      showToast('error', 'Selecciona un proyecto');
+      return;
+    }
+    const desc = expenseDescription.trim();
+    if (!desc) {
+      showToast('error', 'Introduce una descripción');
+      return;
+    }
+    const amount = parseFloat(expenseAmount);
+    if (Number.isNaN(amount) || amount <= 0) {
+      showToast('error', 'Introduce un importe válido');
+      return;
+    }
+
+    setSavingExpense(true);
+    try {
+      const { data, error } = await supabase
+        .from('project_expenses')
+        .insert([
+          {
+            user_id: user.id,
+            project_id: expenseProjectId,
+            description: desc,
+            amount,
+            expense_date: expenseDate,
+            notes: expenseNotes.trim() || null,
+          },
+        ])
+        .select();
+      if (error) throw error;
+
+      if (data?.[0]) {
+        setExpenses((prev) => [data[0], ...prev]);
+      }
+      setExpenseModalOpen(false);
+      showToast('success', `Gasto registrado: ${formatEUR(amount)}`);
+    } catch (error) {
+      console.error('Error saving expense:', error);
+      showToast('error', 'No se pudo guardar el gasto');
+    } finally {
+      setSavingExpense(false);
+    }
+  };
+
+  const deleteExpense = async (expenseId) => {
+    try {
+      const { error } = await supabase
+        .from('project_expenses')
+        .delete()
+        .eq('id', expenseId);
+      if (error) throw error;
+
+      setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+      showToast('success', 'Gasto eliminado');
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      showToast('error', 'No se pudo eliminar el gasto');
     }
   };
 
@@ -745,24 +834,36 @@ export default function Dashboard() {
     .filter((p) => p.billing_type === 'fixed' && p.completed_at)
     .reduce((a, p) => a + Number(p.fixed_price || 0), 0);
 
+  // Expenses within date range (by expense_date)
+  const expensesInRange = (from) => expenses
+    .filter((e) => new Date(e.expense_date) >= from)
+    .reduce((a, e) => a + Number(e.amount || 0), 0);
+
+  const allExpenses = () => expenses.reduce((a, e) => a + Number(e.amount || 0), 0);
+
   const todayHours = sessions.filter((s) => inRange(s, startOfToday)).reduce((a, s) => a + sessionDuration(s), 0);
-  const todayEarnings =
+  const todayGross =
     sessions.filter((s) => inRange(s, startOfToday)).reduce((a, s) => a + sessionEarnings(s), 0) +
     fixedEarnings(startOfToday);
+  const todayEarnings = todayGross - expensesInRange(startOfToday);
 
   const weekHours = sessions.filter((s) => inRange(s, startOfWeek)).reduce((a, s) => a + sessionDuration(s), 0);
-  const weekEarnings =
+  const weekGross =
     sessions.filter((s) => inRange(s, startOfWeek)).reduce((a, s) => a + sessionEarnings(s), 0) +
     fixedEarnings(startOfWeek);
+  const weekEarnings = weekGross - expensesInRange(startOfWeek);
 
   const monthHours = sessions.filter((s) => inRange(s, startOfMonth)).reduce((a, s) => a + sessionDuration(s), 0);
-  const monthEarnings =
+  const monthGross =
     sessions.filter((s) => inRange(s, startOfMonth)).reduce((a, s) => a + sessionEarnings(s), 0) +
     fixedEarnings(startOfMonth);
+  const monthExpenses = expensesInRange(startOfMonth);
+  const monthEarnings = monthGross - monthExpenses;
 
-  const totalEarnings =
+  const totalGross =
     sessions.reduce((a, s) => a + sessionEarnings(s), 0) +
     allFixedEarnings();
+  const totalEarnings = totalGross - allExpenses();
 
   const currentProject = projects.find((p) => p.id === activeProject);
   const currentEarnings = (timerSeconds / 3600) * (currentProject?.rate || 0);
@@ -1470,10 +1571,16 @@ export default function Dashboard() {
                 const earnings = isFixed
                   ? (Number(project.fixed_price) || 0)
                   : hours * project.rate;
-                const effectiveRate = isFixed && hours > 0
-                  ? (Number(project.fixed_price) || 0) / hours
-                  : Number(project.rate) || 0;
+                const projectExpenses = expenses.filter((e) => e.project_id === project.id);
+                const expensesTotal = projectExpenses.reduce((a, e) => a + Number(e.amount || 0), 0);
+                const netEarnings = earnings - expensesTotal;
+                // Effective rate NET (ingresos - gastos) / horas
+                const effectiveRateNet = hours > 0
+                  ? netEarnings / hours
+                  : (isFixed ? 0 : Number(project.rate) || 0);
+                const effectiveRate = effectiveRateNet; // Use NET for badges
                 const isEditing = editingId === project.id;
+                const expensesExpanded = expensesListOpen === project.id;
 
                 return (
                   <div key={project.id} className="p-5 sm:p-6 hover:bg-slate-50/50 transition">
@@ -1662,8 +1769,11 @@ export default function Dashboard() {
                                   </span>
                                 )}
                                 {formatEUR(Number(project.fixed_price) || 0)} · {hours.toFixed(1)}h
+                                {expensesTotal > 0 && (
+                                  <> · <span className="text-red-600">-{formatEUR(expensesTotal)} gastos</span></>
+                                )}
                                 {hours > 0 && (
-                                  <> · <span className="text-emerald-600 font-semibold">{effectiveRate.toFixed(2)} €/h real</span></>
+                                  <> · <span className="text-emerald-600 font-semibold">{effectiveRateNet.toFixed(2)} €/h real{expensesTotal > 0 ? ' neto' : ''}</span></>
                                 )}
                                 {project.estimated_hours && (
                                   <span className="text-slate-400"> · est. {project.estimated_hours}h</span>
@@ -1673,11 +1783,56 @@ export default function Dashboard() {
                               <>
                                 €{project.rate}/h · {hours.toFixed(1)}h ·{' '}
                                 <span className="text-emerald-600 font-semibold">{formatEUR(earnings)}</span>
+                                {expensesTotal > 0 && (
+                                  <> · <span className="text-red-600">-{formatEUR(expensesTotal)} gastos</span> · <span className="text-emerald-700 font-bold">{formatEUR(netEarnings)} neto</span></>
+                                )}
                               </>
                             )}
                           </p>
+                          {projectExpenses.length > 0 && (
+                            <button
+                              onClick={() => setExpensesListOpen(expensesExpanded ? null : project.id)}
+                              className="mt-2 text-xs text-blue-600 hover:underline font-semibold inline-flex items-center gap-1"
+                            >
+                              {expensesExpanded ? 'Ocultar' : 'Ver'} {projectExpenses.length} gasto{projectExpenses.length !== 1 ? 's' : ''}
+                              <span className={`transition-transform ${expensesExpanded ? 'rotate-180' : ''}`}>▾</span>
+                            </button>
+                          )}
+                          {expensesExpanded && (
+                            <div className="mt-3 space-y-2 bg-slate-50 rounded-lg p-3 border border-slate-200">
+                              {projectExpenses.map((exp) => (
+                                <div key={exp.id} className="flex items-center justify-between gap-3 text-sm">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-semibold text-slate-900 truncate">{exp.description}</p>
+                                    <p className="text-xs text-slate-500">
+                                      {new Date(exp.expense_date).toLocaleDateString('es-ES')}
+                                      {exp.notes && ` · ${exp.notes}`}
+                                    </p>
+                                  </div>
+                                  <span className="font-bold text-red-600 tabular-nums whitespace-nowrap">
+                                    -{formatEUR(Number(exp.amount))}
+                                  </span>
+                                  <button
+                                    onClick={() => deleteExpense(exp.id)}
+                                    className="text-slate-400 hover:text-red-600 transition"
+                                    title="Eliminar gasto"
+                                  >
+                                    <X className="w-4 h-4" strokeWidth={2.5} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div className="flex gap-2 flex-wrap">
+                          <button
+                            onClick={() => openExpenseModal(project.id)}
+                            className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition text-sm font-semibold inline-flex items-center gap-1"
+                            title="Añadir gasto"
+                          >
+                            <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                            Gasto
+                          </button>
                           {isFixed && (
                             <button
                               onClick={() => toggleProjectComplete(project)}
@@ -2021,6 +2176,127 @@ export default function Dashboard() {
                   className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {savingManual ? 'Guardando…' : 'Guardar sesión'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Expense modal */}
+        {expenseModalOpen && (
+          <div
+            className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setExpenseModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <h3 className="font-bold text-xl text-slate-900 mb-1">
+                    Añadir gasto al proyecto
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    Material, transporte, subcontratación... Todo lo que reste a tu beneficio.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setExpenseModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 transition"
+                >
+                  <X className="w-5 h-5" strokeWidth={2.5} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+                    Proyecto
+                  </label>
+                  <select
+                    value={expenseProjectId}
+                    onChange={(e) => setExpenseProjectId(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white font-semibold text-slate-900 transition"
+                  >
+                    <option value="">— Selecciona un proyecto —</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+                    Descripción
+                  </label>
+                  <input
+                    type="text"
+                    value={expenseDescription}
+                    onChange={(e) => setExpenseDescription(e.target.value)}
+                    placeholder="Ej: Material de impresión, Transporte, Subcontratación..."
+                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white text-slate-900 transition"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+                      Importe €
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={expenseAmount}
+                      onChange={(e) => setExpenseAmount(e.target.value)}
+                      placeholder="0,00"
+                      className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white font-semibold text-slate-900 transition tabular-nums"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+                      Fecha
+                    </label>
+                    <input
+                      type="date"
+                      value={expenseDate}
+                      onChange={(e) => setExpenseDate(e.target.value)}
+                      max={new Date().toISOString().slice(0, 10)}
+                      className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white font-semibold text-slate-900 transition"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+                    Notas (opcional)
+                  </label>
+                  <textarea
+                    value={expenseNotes}
+                    onChange={(e) => setExpenseNotes(e.target.value)}
+                    placeholder="Detalles adicionales..."
+                    rows={2}
+                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white text-slate-900 transition resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setExpenseModalOpen(false)}
+                  className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-lg font-semibold hover:bg-slate-200 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={saveExpense}
+                  disabled={savingExpense || !expenseProjectId || !expenseDescription || !expenseAmount}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {savingExpense ? 'Guardando…' : 'Guardar gasto'}
                 </button>
               </div>
             </div>
