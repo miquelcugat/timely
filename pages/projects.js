@@ -970,189 +970,215 @@ export default function Projects() {
                     </div>
                   ) : (
                     <>
-                      <ChartCard
-                        title="Horas por día"
-                        subtitle="Últimos 30 días"
-                        chartRef={dailyChartRef}
-                      >
-                        <ResponsiveContainer width="100%" height={220}>
-                          <BarChart data={dailyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis
-                              dataKey="label"
-                              tick={{ fontSize: 9, fill: '#64748b' }}
-                              interval={4}
-                              tickMargin={4}
-                            />
-                            <YAxis
-                              tick={{ fontSize: 9, fill: '#64748b' }}
-                              width={35}
-                              tickMargin={2}
-                            />
-                            <Tooltip
-                              contentStyle={{
-                                backgroundColor: '#fff',
-                                border: '1px solid #e2e8f0',
-                                borderRadius: 8,
-                                fontSize: 12,
-                              }}
-                              formatter={(v) => [`${v}h`, 'Horas']}
-                            />
-                            <Bar dataKey="hours" fill="#2563eb" radius={[3, 3, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </ChartCard>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                        <ChartCard
+                          title="Horas por día"
+                          subtitle="Últimos 30 días"
+                          chartRef={dailyChartRef}
+                        >
+                          <ResponsiveContainer width="100%" height={240}>
+                            <BarChart data={dailyData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                              <XAxis
+                                dataKey="label"
+                                tick={{ fontSize: 10, fill: '#64748b' }}
+                                interval="preserveStartEnd"
+                                tickMargin={6}
+                                axisLine={{ stroke: '#e2e8f0' }}
+                                tickLine={false}
+                              />
+                              <YAxis
+                                tick={{ fontSize: 10, fill: '#64748b' }}
+                                width={32}
+                                tickMargin={4}
+                                axisLine={false}
+                                tickLine={false}
+                              />
+                              <Tooltip
+                                contentStyle={{
+                                  backgroundColor: '#fff',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: 8,
+                                  fontSize: 12,
+                                  padding: '8px 12px',
+                                }}
+                                formatter={(v) => [`${v}h`, 'Horas']}
+                                cursor={{ fill: '#f1f5f9' }}
+                              />
+                              <Bar dataKey="hours" fill="#2563eb" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </ChartCard>
 
-                      <ChartCard
-                        title="Ingresos por semana"
-                        subtitle="Últimas 12 semanas"
-                        chartRef={weeklyChartRef}
-                      >
-                        <ResponsiveContainer width="100%" height={220}>
-                          <LineChart data={weeklyData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis
-                              dataKey="label"
-                              tick={{ fontSize: 9, fill: '#64748b' }}
-                              interval={1}
-                              tickMargin={4}
-                            />
-                            <YAxis
-                              tick={{ fontSize: 9, fill: '#64748b' }}
-                              width={45}
-                              tickMargin={2}
-                              tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}
-                            />
-                            <Tooltip
-                              contentStyle={{
-                                backgroundColor: '#fff',
-                                border: '1px solid #e2e8f0',
-                                borderRadius: 8,
-                                fontSize: 12,
-                              }}
-                              formatter={(v) => [formatEUR(v), 'Ingresos']}
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="earnings"
-                              stroke="#10b981"
-                              strokeWidth={2.5}
-                              dot={{ fill: '#10b981', r: 3 }}
-                              activeDot={{ r: 5 }}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </ChartCard>
+                        <ChartCard
+                          title="Ingresos por semana"
+                          subtitle="Últimas 12 semanas"
+                          chartRef={weeklyChartRef}
+                        >
+                          <ResponsiveContainer width="100%" height={240}>
+                            <LineChart data={weeklyData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                              <XAxis
+                                dataKey="label"
+                                tick={{ fontSize: 10, fill: '#64748b' }}
+                                interval="preserveStartEnd"
+                                tickMargin={6}
+                                axisLine={{ stroke: '#e2e8f0' }}
+                                tickLine={false}
+                              />
+                              <YAxis
+                                tick={{ fontSize: 10, fill: '#64748b' }}
+                                width={42}
+                                tickMargin={4}
+                                axisLine={false}
+                                tickLine={false}
+                                tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}
+                              />
+                              <Tooltip
+                                contentStyle={{
+                                  backgroundColor: '#fff',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: 8,
+                                  fontSize: 12,
+                                  padding: '8px 12px',
+                                }}
+                                formatter={(v) => [formatEUR(v), 'Ingresos']}
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="earnings"
+                                stroke="#10b981"
+                                strokeWidth={2.5}
+                                dot={{ fill: '#10b981', r: 3, strokeWidth: 0 }}
+                                activeDot={{ r: 5, strokeWidth: 0 }}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </ChartCard>
 
-                      <ChartCard
-                        title="Distribución por hora del día"
-                        subtitle="Cuándo sueles trabajar"
-                        chartRef={hourlyChartRef}
-                      >
-                        <ResponsiveContainer width="100%" height={220}>
-                          <BarChart data={hourlyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis
-                              dataKey="hour"
-                              tick={{ fontSize: 8, fill: '#64748b' }}
-                              interval={2}
-                              tickMargin={4}
-                            />
-                            <YAxis
-                              tick={{ fontSize: 9, fill: '#64748b' }}
-                              width={35}
-                              tickMargin={2}
-                            />
-                            <Tooltip
-                              contentStyle={{
-                                backgroundColor: '#fff',
-                                border: '1px solid #e2e8f0',
-                                borderRadius: 8,
-                                fontSize: 12,
-                              }}
-                              formatter={(v) => [`${v}h`, 'Horas trabajadas']}
-                            />
-                            <Bar
-                              dataKey="hoursWorked"
-                              fill="#8b5cf6"
-                              radius={[3, 3, 0, 0]}
-                            />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </ChartCard>
+                        <ChartCard
+                          title="Distribución por hora del día"
+                          subtitle="Cuándo sueles trabajar"
+                          chartRef={hourlyChartRef}
+                        >
+                          <ResponsiveContainer width="100%" height={240}>
+                            <BarChart data={hourlyData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                              <XAxis
+                                dataKey="hour"
+                                tick={{ fontSize: 10, fill: '#64748b' }}
+                                interval={3}
+                                tickMargin={6}
+                                axisLine={{ stroke: '#e2e8f0' }}
+                                tickLine={false}
+                              />
+                              <YAxis
+                                tick={{ fontSize: 10, fill: '#64748b' }}
+                                width={32}
+                                tickMargin={4}
+                                axisLine={false}
+                                tickLine={false}
+                              />
+                              <Tooltip
+                                contentStyle={{
+                                  backgroundColor: '#fff',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: 8,
+                                  fontSize: 12,
+                                  padding: '8px 12px',
+                                }}
+                                formatter={(v) => [`${v}h`, 'Horas']}
+                                cursor={{ fill: '#f1f5f9' }}
+                              />
+                              <Bar
+                                dataKey="hoursWorked"
+                                fill="#8b5cf6"
+                                radius={[4, 4, 0, 0]}
+                                maxBarSize={18}
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </ChartCard>
 
-                      {mode === 'project' && selectedProject && (() => {
-                        const projSessions = sessions.filter(s => s.project_id === selectedProject.id);
-                        const isFixed = selectedProject.billing_type === 'fixed';
-                        const gross = isFixed
-                          ? Number(selectedProject.fixed_price || 0)
-                          : projSessions.reduce((a, s) => a + Number(s.earned || 0), 0);
-                        const projExp = expenses.filter(e => e.project_id === selectedProject.id);
-                        const expTotal = projExp.reduce((a, e) => a + Number(e.amount || 0), 0);
-                        const balance = gross - expTotal;
+                        {mode === 'project' && selectedProject && (() => {
+                          const projSessions = sessions.filter(s => s.project_id === selectedProject.id);
+                          const isFixed = selectedProject.billing_type === 'fixed';
+                          const gross = isFixed
+                            ? Number(selectedProject.fixed_price || 0)
+                            : projSessions.reduce((a, s) => a + Number(s.earned || 0), 0);
+                          const projExp = expenses.filter(e => e.project_id === selectedProject.id);
+                          const expTotal = projExp.reduce((a, e) => a + Number(e.amount || 0), 0);
+                          const balance = gross - expTotal;
 
-                        if (gross === 0 && expTotal === 0) return null;
+                          if (gross === 0 && expTotal === 0) return null;
 
-                        const chartData = [
-                          { name: 'Ingresos', value: Math.round(gross * 100) / 100, color: '#10b981' },
-                          { name: 'Gastos', value: Math.round(expTotal * 100) / 100, color: '#ef4444' },
-                          { name: 'Balance', value: Math.round(balance * 100) / 100, color: balance >= 0 ? '#2563eb' : '#dc2626' },
-                        ];
+                          const chartData = [
+                            { name: 'Ingresos', value: Math.round(gross * 100) / 100, color: '#10b981' },
+                            { name: 'Gastos', value: Math.round(expTotal * 100) / 100, color: '#ef4444' },
+                            { name: 'Balance', value: Math.round(balance * 100) / 100, color: balance >= 0 ? '#2563eb' : '#dc2626' },
+                          ];
 
-                        return (
-                          <ChartCard
-                            title="Ingresos vs gastos"
-                            subtitle="Rentabilidad de este proyecto"
-                          >
-                            <ResponsiveContainer width="100%" height={220}>
-                              <BarChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                <XAxis
-                                  dataKey="name"
-                                  tick={{ fontSize: 11, fill: '#334155' }}
-                                  tickMargin={4}
-                                />
-                                <YAxis
-                                  tick={{ fontSize: 9, fill: '#64748b' }}
-                                  width={35}
-                                  tickMargin={2}
-                                  tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v}
-                                />
-                                <Tooltip
-                                  contentStyle={{
-                                    backgroundColor: '#fff',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: 8,
-                                    fontSize: 12,
-                                  }}
-                                  formatter={(v) => [formatEUR(v), '']}
-                                />
-                                <Bar dataKey="value" radius={[3, 3, 0, 0]}>
-                                  {chartData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                  ))}
-                                </Bar>
-                              </BarChart>
-                            </ResponsiveContainer>
-                            <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100">
-                              <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Ingresos</p>
-                                <p className="text-sm font-bold text-emerald-600 tabular-nums">{formatEUR(gross)}</p>
+                          return (
+                            <ChartCard
+                              title="Ingresos vs gastos"
+                              subtitle="Rentabilidad de este proyecto"
+                            >
+                              <ResponsiveContainer width="100%" height={180}>
+                                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                                  <XAxis
+                                    dataKey="name"
+                                    tick={{ fontSize: 11, fill: '#334155', fontWeight: 600 }}
+                                    tickMargin={6}
+                                    axisLine={{ stroke: '#e2e8f0' }}
+                                    tickLine={false}
+                                  />
+                                  <YAxis
+                                    tick={{ fontSize: 10, fill: '#64748b' }}
+                                    width={42}
+                                    tickMargin={4}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}
+                                  />
+                                  <Tooltip
+                                    contentStyle={{
+                                      backgroundColor: '#fff',
+                                      border: '1px solid #e2e8f0',
+                                      borderRadius: 8,
+                                      fontSize: 12,
+                                      padding: '8px 12px',
+                                    }}
+                                    formatter={(v) => [formatEUR(v), '']}
+                                    cursor={{ fill: '#f1f5f9' }}
+                                  />
+                                  <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={60}>
+                                    {chartData.map((entry, index) => (
+                                      <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                  </Bar>
+                                </BarChart>
+                              </ResponsiveContainer>
+                              <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100">
+                                <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Ingresos</p>
+                                  <p className="text-sm font-bold text-emerald-600 tabular-nums">{formatEUR(gross)}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Gastos</p>
+                                  <p className="text-sm font-bold text-red-600 tabular-nums">-{formatEUR(expTotal)}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Balance</p>
+                                  <p className={`text-sm font-bold tabular-nums ${balance >= 0 ? 'text-blue-600' : 'text-red-700'}`}>
+                                    {formatEUR(balance)}
+                                  </p>
+                                </div>
                               </div>
-                              <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Gastos</p>
-                                <p className="text-sm font-bold text-red-600 tabular-nums">-{formatEUR(expTotal)}</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Balance</p>
-                                <p className={`text-sm font-bold tabular-nums ${balance >= 0 ? 'text-blue-600' : 'text-red-700'}`}>
-                                  {formatEUR(balance)}
-                                </p>
-                              </div>
-                            </div>
-                          </ChartCard>
-                        );
-                      })()}
+                            </ChartCard>
+                          );
+                        })()}
+                      </div>
 
                       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                         <div className="p-6 border-b border-slate-100">
@@ -1338,12 +1364,12 @@ function StatCard({ label, value, accent, small }) {
 
 function ChartCard({ title, subtitle, chartRef, children }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 h-full flex flex-col">
       <div className="mb-4">
-        <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-        <p className="text-sm text-slate-500">{subtitle}</p>
+        <h2 className="text-base font-bold text-slate-900">{title}</h2>
+        <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
       </div>
-      <div ref={chartRef} className="bg-white">
+      <div ref={chartRef} className="bg-white flex-1">
         {children}
       </div>
     </div>
