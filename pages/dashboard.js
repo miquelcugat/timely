@@ -1594,7 +1594,7 @@ export default function Dashboard() {
                 const expensesExpanded = expensesListOpen === project.id;
 
                 return (
-                  <div key={project.id} className="p-5 sm:p-6 hover:bg-slate-50/50 transition">
+                  <div key={project.id} className="p-4 sm:p-6 hover:bg-slate-50/50 transition">
                     {isEditing ? (
                       <div className="space-y-3">
                         {/* Billing type tabs in edit */}
@@ -1716,149 +1716,192 @@ export default function Dashboard() {
                         )}
                       </div>
                     ) : (
-                      <div className="flex flex-wrap justify-between items-center gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-bold text-slate-900 truncate">{project.name}</h3>
-                            {hourlyGoal && (() => {
-                              const r = isFixed ? effectiveRate : (Number(project.rate) || 0);
-                              // For fixed-price projects with no hours yet, don't show badge
-                              if (isFixed && hours === 0) {
-                                return (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                                    Sin datos
-                                  </span>
-                                );
-                              }
-                              const ratio = r / hourlyGoal;
-                              if (ratio >= 1.10) {
-                                return (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                    Excelente
-                                  </span>
-                                );
-                              } else if (ratio >= 1) {
-                                return (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                    Rentable
-                                  </span>
-                                );
-                              } else if (ratio >= 0.85) {
-                                return (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                    Margen ajustado
-                                  </span>
-                                );
-                              } else {
-                                return (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                                    Por debajo
-                                  </span>
-                                );
-                              }
-                            })()}
+                      <div className="space-y-3">
+                        {/* Header: name + badge */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <h3 className="font-bold text-slate-900 truncate text-base">{project.name}</h3>
+                              {hourlyGoal && (() => {
+                                const r = isFixed ? effectiveRate : (Number(project.rate) || 0);
+                                if (isFixed && hours === 0) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                                      Sin datos
+                                    </span>
+                                  );
+                                }
+                                const ratio = r / hourlyGoal;
+                                if (ratio >= 1.10) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                      Excelente
+                                    </span>
+                                  );
+                                } else if (ratio >= 1) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                      Rentable
+                                    </span>
+                                  );
+                                } else if (ratio >= 0.85) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                      Margen ajustado
+                                    </span>
+                                  );
+                                } else {
+                                  return (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                      Por debajo
+                                    </span>
+                                  );
+                                }
+                              })()}
+                            </div>
+
+                            {/* Tags row: billing type + completed + client */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {isFixed ? (
+                                <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[10px] font-semibold border border-blue-200">
+                                  Precio cerrado
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-semibold border border-slate-200">
+                                  €{project.rate}/h
+                                </span>
+                              )}
+                              {project.completed_at && (
+                                <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded text-[10px] font-semibold border border-emerald-200">
+                                  <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                                  Completado
+                                </span>
+                              )}
+                              {project.client_id && (
+                                <span className="inline-flex items-center gap-1 text-slate-600 text-xs">
+                                  <User className="w-3 h-3" strokeWidth={2.25} />
+                                  {clients.find((c) => c.id === project.client_id)?.name || 'Cliente borrado'}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          {project.client_id && (
-                            <p className="text-xs text-slate-500 mt-0.5 truncate inline-flex items-center gap-1">
-                              <User className="w-3 h-3" strokeWidth={2.25} />
-                              {clients.find((c) => c.id === project.client_id)?.name || 'Cliente borrado'}
+                        </div>
+
+                        {/* Metrics grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <div className="bg-slate-50 rounded-lg p-2.5">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Horas</p>
+                            <p className="text-sm font-bold text-slate-900 tabular-nums">{hours.toFixed(1)}h</p>
+                          </div>
+                          <div className="bg-emerald-50 rounded-lg p-2.5">
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mb-0.5">
+                              {isFixed ? 'Precio fijo' : 'Ingresos'}
                             </p>
-                          )}
-                          <p className="text-sm text-slate-500 mt-0.5 tabular-nums">
-                            {isFixed ? (
-                              <>
-                                <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[10px] font-semibold mr-2 border border-blue-200">Precio cerrado</span>
-                                {project.completed_at && (
-                                  <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded text-[10px] font-semibold mr-2 border border-emerald-200">
-                                    <Check className="w-2.5 h-2.5" strokeWidth={3} />
-                                    Completado
-                                  </span>
-                                )}
-                                {formatEUR(Number(project.fixed_price) || 0)} · {hours.toFixed(1)}h
-                                {expensesTotal > 0 && (
-                                  <> · <span className="text-red-600">-{formatEUR(expensesTotal)} gastos</span></>
-                                )}
-                                {hours > 0 && (
-                                  <> · <span className="text-emerald-600 font-semibold">{effectiveRateNet.toFixed(2)} €/h real{expensesTotal > 0 ? ' neto' : ''}</span></>
-                                )}
-                                {project.estimated_hours && (
-                                  <span className="text-slate-400"> · est. {project.estimated_hours}h</span>
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                €{project.rate}/h · {hours.toFixed(1)}h ·{' '}
-                                <span className="text-emerald-600 font-semibold">{formatEUR(earnings)}</span>
-                                {expensesTotal > 0 && (
-                                  <> · <span className="text-red-600">-{formatEUR(expensesTotal)} gastos</span> · <span className="text-emerald-700 font-bold">{formatEUR(netEarnings)} neto</span></>
-                                )}
-                              </>
-                            )}
-                          </p>
-                          {projectExpenses.length > 0 && (
+                            <p className="text-sm font-bold text-emerald-700 tabular-nums">{formatEUR(earnings)}</p>
+                          </div>
+                          {expensesTotal > 0 ? (
+                            <>
+                              <div className="bg-red-50 rounded-lg p-2.5">
+                                <p className="text-[10px] font-bold text-red-600 uppercase tracking-wide mb-0.5">Gastos</p>
+                                <p className="text-sm font-bold text-red-700 tabular-nums">-{formatEUR(expensesTotal)}</p>
+                              </div>
+                              <div className="bg-blue-50 rounded-lg p-2.5">
+                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide mb-0.5">
+                                  {hours > 0 ? '€/h real neto' : 'Neto'}
+                                </p>
+                                <p className="text-sm font-bold text-blue-700 tabular-nums">
+                                  {hours > 0 ? `${effectiveRateNet.toFixed(0)}€/h` : formatEUR(netEarnings)}
+                                </p>
+                              </div>
+                            </>
+                          ) : hours > 0 && isFixed ? (
+                            <>
+                              <div className="bg-blue-50 rounded-lg p-2.5">
+                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide mb-0.5">€/h real</p>
+                                <p className="text-sm font-bold text-blue-700 tabular-nums">{effectiveRateNet.toFixed(0)}€/h</p>
+                              </div>
+                              {project.estimated_hours && (
+                                <div className="bg-slate-50 rounded-lg p-2.5">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Estimado</p>
+                                  <p className="text-sm font-bold text-slate-700 tabular-nums">{project.estimated_hours}h</p>
+                                </div>
+                              )}
+                            </>
+                          ) : project.estimated_hours ? (
+                            <div className="bg-slate-50 rounded-lg p-2.5">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Estimado</p>
+                              <p className="text-sm font-bold text-slate-700 tabular-nums">{project.estimated_hours}h</p>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        {/* Expenses list expandable */}
+                        {projectExpenses.length > 0 && (
+                          <>
                             <button
                               onClick={() => setExpensesListOpen(expensesExpanded ? null : project.id)}
-                              className="mt-2 text-xs text-blue-600 hover:underline font-semibold inline-flex items-center gap-1"
+                              className="text-xs text-blue-600 hover:underline font-semibold inline-flex items-center gap-1"
                             >
                               {expensesExpanded ? 'Ocultar' : 'Ver'} {projectExpenses.length} gasto{projectExpenses.length !== 1 ? 's' : ''}
                               <span className={`transition-transform ${expensesExpanded ? 'rotate-180' : ''}`}>▾</span>
                             </button>
-                          )}
-                          {expensesExpanded && (
-                            <div className="mt-3 space-y-2 bg-slate-50 rounded-lg p-3 border border-slate-200">
-                              {projectExpenses.map((exp) => (
-                                <div key={exp.id} className="flex items-center justify-between gap-3 text-sm">
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-semibold text-slate-900 truncate">{exp.description}</p>
-                                    <p className="text-xs text-slate-500">
-                                      {new Date(exp.expense_date).toLocaleDateString('es-ES')}
-                                      {exp.notes && ` · ${exp.notes}`}
-                                    </p>
+                            {expensesExpanded && (
+                              <div className="space-y-2 bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                {projectExpenses.map((exp) => (
+                                  <div key={exp.id} className="flex items-center justify-between gap-2 text-sm">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-semibold text-slate-900 truncate text-sm">{exp.description}</p>
+                                      <p className="text-[11px] text-slate-500">
+                                        {new Date(exp.expense_date).toLocaleDateString('es-ES')}
+                                        {exp.notes && ` · ${exp.notes}`}
+                                      </p>
+                                    </div>
+                                    <span className="font-bold text-red-600 tabular-nums whitespace-nowrap text-sm">
+                                      -{formatEUR(Number(exp.amount))}
+                                    </span>
+                                    <button
+                                      onClick={() => deleteExpense(exp.id)}
+                                      className="text-slate-400 hover:text-red-600 transition p-1"
+                                      title="Eliminar gasto"
+                                    >
+                                      <X className="w-4 h-4" strokeWidth={2.5} />
+                                    </button>
                                   </div>
-                                  <span className="font-bold text-red-600 tabular-nums whitespace-nowrap">
-                                    -{formatEUR(Number(exp.amount))}
-                                  </span>
-                                  <button
-                                    onClick={() => deleteExpense(exp.id)}
-                                    className="text-slate-400 hover:text-red-600 transition"
-                                    title="Eliminar gasto"
-                                  >
-                                    <X className="w-4 h-4" strokeWidth={2.5} />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex gap-2 flex-wrap">
-                          <button
-                            onClick={() => openExpenseModal(project.id)}
-                            className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition text-sm font-semibold inline-flex items-center gap-1"
-                            title="Añadir gasto"
-                          >
-                            <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
-                            Gasto
-                          </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Action buttons */}
+                        <div className="flex gap-2 pt-1">
                           {isFixed && (
                             <button
                               onClick={() => toggleProjectComplete(project)}
-                              className={`px-4 py-2 rounded-lg transition text-sm font-semibold ${
+                              className={`flex-1 sm:flex-initial px-3 py-2 rounded-lg transition text-sm font-semibold ${
                                 project.completed_at
                                   ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                   : 'bg-emerald-600 text-white hover:bg-emerald-700'
                               }`}
                             >
-                              {project.completed_at ? 'Reabrir' : 'Marcar completado'}
+                              {project.completed_at ? 'Reabrir' : 'Completar'}
                             </button>
                           )}
                           <button
+                            onClick={() => openExpenseModal(project.id)}
+                            className="flex-1 sm:flex-initial px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition text-sm font-semibold inline-flex items-center justify-center gap-1"
+                          >
+                            <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                            Gasto
+                          </button>
+                          <button
                             onClick={() => startEdit(project)}
-                            className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition text-sm font-semibold"
+                            className="flex-1 sm:flex-initial px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition text-sm font-semibold"
                           >
                             Editar
                           </button>
@@ -1870,9 +1913,10 @@ export default function Dashboard() {
                                 label: project.name,
                               })
                             }
-                            className="px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition text-sm font-semibold"
+                            className="px-3 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition text-sm font-semibold inline-flex items-center justify-center"
+                            title="Borrar proyecto"
                           >
-                            Borrar
+                            <X className="w-4 h-4" strokeWidth={2.5} />
                           </button>
                         </div>
                       </div>
