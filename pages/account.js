@@ -42,6 +42,11 @@ export default function Account() {
 
   const { subscription, plan, isPro, loading: planLoading } = usePlan(user?.id);
 
+  // Promo code
+  const [promoCode, setPromoCode] = useState('');
+  const [redeemingPromo, setRedeemingPromo] = useState(false);
+  const [promoMessage, setPromoMessage] = useState(null); // { type: 'success' | 'error', text: string }
+
   const [profile, setProfile] = useState(EMPTY_PROFILE);
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -276,6 +281,37 @@ export default function Account() {
     }
   };
 
+  const redeemPromo = async () => {
+    const code = promoCode.trim();
+    if (!code) {
+      setPromoMessage({ type: 'error', text: 'Introduce un código' });
+      return;
+    }
+    setRedeemingPromo(true);
+    setPromoMessage(null);
+    try {
+      const { data, error } = await supabase.rpc('redeem_promo_code', { p_code: code });
+      if (error) throw error;
+
+      if (data?.success) {
+        setPromoMessage({
+          type: 'success',
+          text: `¡Pro activado! Tienes acceso durante ${data.duration_months} meses.`,
+        });
+        setPromoCode('');
+        // Reload the page after 1.5s so the plan refreshes
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        setPromoMessage({ type: 'error', text: data?.error || 'Error al canjear' });
+      }
+    } catch (err) {
+      console.error('Redeem error:', err);
+      setPromoMessage({ type: 'error', text: 'Error al canjear el código' });
+    } finally {
+      setRedeemingPromo(false);
+    }
+  };
+
   if (loading || planLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -392,6 +428,50 @@ export default function Account() {
               </button>
             )}
           </div>
+
+          {/* Promo code card (only for Free users) */}
+          {!isPro && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
+              <h2 className="text-lg font-bold text-slate-900 mb-1">¿Tienes un código?</h2>
+              <p className="text-sm text-slate-500 mb-4">
+                Canjéalo aquí para activar Pro gratis
+              </p>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={promoCode}
+                  onChange={(e) => {
+                    setPromoCode(e.target.value.toUpperCase());
+                    setPromoMessage(null);
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && redeemPromo()}
+                  placeholder="CÓDIGO"
+                  className="flex-1 px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white font-bold text-slate-900 transition uppercase tracking-wider"
+                  maxLength={40}
+                />
+                <button
+                  onClick={redeemPromo}
+                  disabled={redeemingPromo || !promoCode.trim()}
+                  className="px-6 py-3 bg-slate-900 text-white rounded-lg font-bold hover:bg-slate-800 transition disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {redeemingPromo ? 'Canjeando…' : 'Canjear'}
+                </button>
+              </div>
+
+              {promoMessage && (
+                <div
+                  className={`mt-3 p-3 rounded-lg text-sm font-semibold ${
+                    promoMessage.type === 'success'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}
+                >
+                  {promoMessage.text}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
             <div className="flex items-start justify-between gap-3 mb-1">
