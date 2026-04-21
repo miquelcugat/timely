@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -13,6 +13,25 @@ export default function Auth() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Detect already-logged-in users + OAuth callbacks
+  useEffect(() => {
+    // On mount: check if there's already a valid session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        router.replace('/dashboard');
+      }
+    });
+
+    // Listen for auth state changes (e.g., after OAuth callback)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        router.replace('/dashboard');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router]);
 
   const handleAuth = async (e) => {
     e.preventDefault();
