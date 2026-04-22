@@ -50,7 +50,17 @@ export default function Projects() {
   const [toast, setToast] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
-  const { isPro, loading: planLoading } = usePlan(user?.id);
+  // Create project modal
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectRate, setNewProjectRate] = useState('');
+  const [newProjectClientId, setNewProjectClientId] = useState('');
+  const [newProjectBillingType, setNewProjectBillingType] = useState('hourly');
+  const [newProjectFixedPrice, setNewProjectFixedPrice] = useState('');
+  const [newProjectEstimatedHours, setNewProjectEstimatedHours] = useState('');
+  const [savingProject, setSavingProject] = useState(false);
+
+  const { isPro, loading: planLoading, limits } = usePlan(user?.id);
 
   const dailyChartRef = useRef(null);
   const weeklyChartRef = useRef(null);
@@ -77,6 +87,78 @@ export default function Projects() {
 
   const formatDateShort = (d) =>
     new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' }).format(d);
+
+  const addProject = async () => {
+    const name = newProjectName.trim();
+    if (!name) {
+      showToast('error', 'Introduce un nombre de proyecto');
+      return;
+    }
+
+    let rate = null;
+    let fixedPrice = null;
+    let estimatedHours = null;
+
+    if (newProjectBillingType === 'hourly') {
+      rate = parseFloat(newProjectRate);
+      if (Number.isNaN(rate) || rate <= 0) {
+        showToast('error', 'Introduce una tarifa válida');
+        return;
+      }
+    } else if (newProjectBillingType === 'fixed') {
+      fixedPrice = parseFloat(newProjectFixedPrice);
+      if (Number.isNaN(fixedPrice) || fixedPrice <= 0) {
+        showToast('error', 'Introduce un precio válido');
+        return;
+      }
+      rate = 0;
+      if (newProjectEstimatedHours) {
+        const est = parseFloat(newProjectEstimatedHours);
+        if (!Number.isNaN(est) && est > 0) estimatedHours = est;
+      }
+    }
+
+    if (!isPro && limits && projects.length >= limits.maxProjects) {
+      setShowUpgradeModal(true);
+      return;
+    }
+
+    setSavingProject(true);
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .insert([{
+          user_id: user.id,
+          name,
+          rate: rate || 0,
+          client_id: newProjectClientId || null,
+          billing_type: newProjectBillingType,
+          fixed_price: fixedPrice,
+          estimated_hours: estimatedHours,
+        }])
+        .select();
+
+      if (error) throw error;
+
+      if (data?.[0]) {
+        setProjects((prev) => [data[0], ...prev]);
+        setSelectedId(data[0].id);
+      }
+      setNewProjectName('');
+      setNewProjectRate('');
+      setNewProjectClientId('');
+      setNewProjectFixedPrice('');
+      setNewProjectEstimatedHours('');
+      setNewProjectBillingType('hourly');
+      setCreateModalOpen(false);
+      showToast('success', 'Proyecto creado');
+    } catch (error) {
+      console.error('Error adding project:', error);
+      showToast('error', 'No se pudo crear el proyecto');
+    } finally {
+      setSavingProject(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -695,22 +777,31 @@ export default function Projects() {
         </header>
 
         <main className="max-w-6xl mx-auto px-6 py-8 sm:py-10 pb-24 md:pb-10">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-900">Mis proyectos</h1>
-            <p className="text-slate-500 mt-1">
-              Análisis detallado, estadísticas y exportación de cada proyecto o cliente.
-            </p>
+          <div className="mb-8 flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Mis proyectos</h1>
+              <p className="text-slate-500 mt-1">
+                Análisis detallado, estadísticas y gestión de cada proyecto.
+              </p>
+            </div>
+            <button
+              onClick={() => setCreateModalOpen(true)}
+              className="px-5 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 active:scale-[0.99] transition inline-flex items-center gap-2 shadow-sm"
+            >
+              <span className="text-lg leading-none">+</span>
+              Nuevo proyecto
+            </button>
           </div>
 
           {projects.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
-              <p className="text-slate-500 mb-4">Aún no tienes proyectos.</p>
-              <Link
-                href="/dashboard"
+              <p className="text-slate-500 mb-6">Aún no tienes proyectos.</p>
+              <button
+                onClick={() => setCreateModalOpen(true)}
                 className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition"
               >
-                Crear el primero
-              </Link>
+                Crear mi primer proyecto
+              </button>
             </div>
           ) : (
             <>
@@ -1267,6 +1358,166 @@ export default function Projects() {
         )}
 
         <MobileNav />
+
+        {/* Create project modal */}
+        {createModalOpen && (
+          <div
+            className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setCreateModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-2xl p-6 sm:p-8 max-w-lg w-full shadow-2xl max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <h3 className="font-bold text-xl text-slate-900 mb-1">Nuevo proyecto</h3>
+                  <p className="text-sm text-slate-500">Crea un proyecto y empieza a registrar tiempo</p>
+                </div>
+                <button
+                  onClick={() => setCreateModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 transition text-2xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Billing type tabs */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+                    Tipo de facturación
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewProjectBillingType('hourly')}
+                      className={`flex-1 px-3 py-3 text-sm font-semibold rounded-lg transition ${
+                        newProjectBillingType === 'hourly'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Por horas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewProjectBillingType('fixed')}
+                      className={`flex-1 px-3 py-3 text-sm font-semibold rounded-lg transition ${
+                        newProjectBillingType === 'fixed'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Precio cerrado
+                    </button>
+                  </div>
+                </div>
+
+                {/* Project name */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+                    Nombre del proyecto
+                  </label>
+                  <input
+                    type="text"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    placeholder="Ej: Rediseño Web · Cliente A"
+                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white text-slate-900 transition"
+                  />
+                </div>
+
+                {/* Rate or Fixed price */}
+                {newProjectBillingType === 'hourly' ? (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+                      Tarifa por hora (€)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newProjectRate}
+                      onChange={(e) => setNewProjectRate(e.target.value)}
+                      placeholder="50"
+                      className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white text-slate-900 transition tabular-nums"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+                        Precio total (€)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newProjectFixedPrice}
+                        onChange={(e) => setNewProjectFixedPrice(e.target.value)}
+                        placeholder="1500"
+                        className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white text-slate-900 transition tabular-nums"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+                        Horas estimadas (opcional)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={newProjectEstimatedHours}
+                        onChange={(e) => setNewProjectEstimatedHours(e.target.value)}
+                        placeholder="30"
+                        className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white text-slate-900 transition tabular-nums"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Si las conoces, Valopo calculará tu €/hora real
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {/* Client */}
+                {clients.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+                      Cliente (opcional)
+                    </label>
+                    <select
+                      value={newProjectClientId}
+                      onChange={(e) => setNewProjectClientId(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white text-slate-900 transition"
+                    >
+                      <option value="">— Sin cliente asignado —</option>
+                      {clients.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setCreateModalOpen(false)}
+                  className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-lg font-semibold hover:bg-slate-200 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={addProject}
+                  disabled={savingProject}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition disabled:opacity-60"
+                >
+                  {savingProject ? 'Creando…' : 'Crear proyecto'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showUpgradeModal && (
           <div
