@@ -37,6 +37,7 @@ export default function InvoicesIndex() {
   const [wizardFrom, setWizardFrom] = useState('');
   const [wizardTo, setWizardTo] = useState('');
   const [wizardLineMode, setWizardLineMode] = useState('grouped');
+  const [manualLines, setManualLines] = useState([]);
   const [wizardVatRate, setWizardVatRate] = useState(21);
   const [wizardIrpfRate, setWizardIrpfRate] = useState(15);
   const [wizardIssueDate, setWizardIssueDate] = useState('');
@@ -173,6 +174,7 @@ export default function InvoicesIndex() {
   const closeWizard = () => {
     setShowWizard(false);
     setWizardStep(1);
+    setManualLines([]);
   };
 
   const applyPeriod = (period) => {
@@ -220,8 +222,8 @@ export default function InvoicesIndex() {
     });
   }, [wizardClientId, wizardFrom, wizardTo, sessions, projects]);
 
-  // Build invoice lines preview
-  const wizardLines = useMemo(() => {
+  // Build invoice lines preview (sessions)
+  const sessionLines = useMemo(() => {
     if (wizardSessions.length === 0) return [];
 
     if (wizardLineMode === 'detailed') {
@@ -242,6 +244,7 @@ export default function InvoicesIndex() {
           amount: Number((hours * rate).toFixed(2)),
           project_id: s.project_id,
           session_ids: [s.id],
+          source: 'session',
         };
       });
     } else {
@@ -269,10 +272,41 @@ export default function InvoicesIndex() {
           amount: Number((g.totalHours * g.rate).toFixed(2)),
           project_id: g.project_id,
           session_ids: g.sessions.map((s) => s.id),
+          source: 'session',
         };
       });
     }
   }, [wizardSessions, wizardLineMode, projects, wizardFrom]);
+
+  // Combine session lines + manual lines
+  const wizardLines = useMemo(() => {
+    return [...sessionLines, ...manualLines.map(l => ({
+      description: l.description,
+      quantity: Number(l.quantity),
+      unit_price: Number(l.unit_price),
+      amount: Number((Number(l.quantity) * Number(l.unit_price)).toFixed(2)),
+      project_id: null,
+      session_ids: null,
+      source: 'manual',
+    }))];
+  }, [sessionLines, manualLines]);
+
+  const addManualLine = () => {
+    setManualLines(prev => [...prev, {
+      id: Date.now() + Math.random(),
+      description: '',
+      quantity: 1,
+      unit_price: 0,
+    }]);
+  };
+
+  const updateManualLine = (id, field, value) => {
+    setManualLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
+  };
+
+  const removeManualLine = (id) => {
+    setManualLines(prev => prev.filter(l => l.id !== id));
+  };
 
   const wizardTotals = useMemo(() => {
     const subtotal = wizardLines.reduce((a, l) => a + l.amount, 0);
@@ -290,8 +324,19 @@ export default function InvoicesIndex() {
   // ---------- Create invoice ----------
   const createInvoice = async () => {
     if (wizardLines.length === 0) {
-      showToast('error', 'No hay sesiones para facturar');
+      showToast('error', 'Añade al menos una línea a la factura');
       return;
+    }
+    // Validate manual lines
+    for (const l of manualLines) {
+      if (!l.description.trim()) {
+        showToast('error', 'Todas las líneas manuales necesitan descripción');
+        return;
+      }
+      if (Number(l.quantity) <= 0 || Number(l.unit_price) < 0) {
+        showToast('error', 'Revisa cantidades y precios de las líneas manuales');
+        return;
+      }
     }
     setCreating(true);
     try {
@@ -828,9 +873,14 @@ export default function InvoicesIndex() {
                         </p>
                       </div>
                       {wizardSessions.length === 0 ? (
-                        <p className="text-sm text-slate-500">
-                          No hay sesiones de este cliente en este periodo.
-                        </p>
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <p className="text-sm text-slate-700">
+                            No hay sesiones de este cliente en este periodo.
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Puedes continuar y añadir líneas manualmente en el siguiente paso (ej: servicios cerrados, materiales, etc.)
+                          </p>
+                        </div>
                       ) : (
                         <>
                           <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
@@ -920,18 +970,28 @@ export default function InvoicesIndex() {
                         <div className="bg-slate-50 px-3 py-2 grid grid-cols-[1fr_60px_70px_80px] gap-2 text-xs font-bold text-slate-600 uppercase">
                           <div>Descripción</div>
                           <div className="text-right">Cant.</div>
-                          <div className="text-right">€/h</div>
+                          <div className="text-right">€/u</div>
                           <div className="text-right">Importe</div>
                         </div>
                         <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                          {wizardLines.length === 0 && (
+                            <div className="px-3 py-6 text-center text-sm text-slate-400">
+                              Selecciona un período con sesiones o añade líneas manualmente
+                            </div>
+                          )}
                           {wizardLines.map((l, i) => (
                             <div
                               key={i}
-                              className="px-3 py-2 grid grid-cols-[1fr_60px_70px_80px] gap-2 text-sm"
+                              className={`px-3 py-2 grid grid-cols-[1fr_60px_70px_80px] gap-2 text-sm ${l.source === 'manual' ? 'bg-blue-50/40' : ''}`}
                             >
-                              <div className="text-slate-700 truncate">{l.description}</div>
+                              <div className="text-slate-700 truncate flex items-center gap-1.5">
+                                {l.source === 'manual' && (
+                                  <span className="text-[9px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded uppercase flex-shrink-0">Manual</span>
+                                )}
+                                <span className="truncate">{l.description}</span>
+                              </div>
                               <div className="text-right tabular-nums text-slate-600">
-                                {l.quantity}h
+                                {l.quantity}
                               </div>
                               <div className="text-right tabular-nums text-slate-600">
                                 {l.unit_price}
@@ -943,6 +1003,78 @@ export default function InvoicesIndex() {
                           ))}
                         </div>
                       </div>
+                    </div>
+
+                    {/* Manual lines editor */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                          Líneas manuales {manualLines.length > 0 && `(${manualLines.length})`}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={addManualLine}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition inline-flex items-center gap-1"
+                        >
+                          <span className="text-base leading-none">+</span>
+                          Añadir línea
+                        </button>
+                      </div>
+                      {manualLines.length === 0 ? (
+                        <p className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3">
+                          Para cobrar cosas que no vienen del cronómetro: materiales, retainers, gastos reembolsables, etc.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {manualLines.map((l) => (
+                            <div
+                              key={l.id}
+                              className="border-2 border-blue-100 bg-blue-50/30 rounded-lg p-3 space-y-2"
+                            >
+                              <input
+                                type="text"
+                                placeholder="Descripción (ej: Diseño de logo, Hosting anual…)"
+                                value={l.description}
+                                onChange={(e) => updateManualLine(l.id, 'description', e.target.value)}
+                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 transition"
+                              />
+                              <div className="grid grid-cols-[80px_100px_1fr_36px] gap-2 items-center">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="Cant."
+                                  value={l.quantity}
+                                  onChange={(e) => updateManualLine(l.id, 'quantity', e.target.value)}
+                                  className="w-full px-2 py-2 bg-white border border-slate-200 rounded-lg text-sm tabular-nums text-center focus:outline-none focus:border-blue-500 transition"
+                                />
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="€ unitario"
+                                  value={l.unit_price}
+                                  onChange={(e) => updateManualLine(l.id, 'unit_price', e.target.value)}
+                                  className="w-full px-2 py-2 bg-white border border-slate-200 rounded-lg text-sm tabular-nums text-center focus:outline-none focus:border-blue-500 transition"
+                                />
+                                <div className="text-right text-sm font-bold text-slate-900 tabular-nums">
+                                  {formatEUR((Number(l.quantity) || 0) * (Number(l.unit_price) || 0))}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeManualLine(l.id)}
+                                  className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                                  aria-label="Eliminar línea"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1083,10 +1215,7 @@ export default function InvoicesIndex() {
                         showToast('error', 'Elige un cliente');
                         return;
                       }
-                      if (wizardStep === 2 && wizardSessions.length === 0) {
-                        showToast('error', 'No hay sesiones en este periodo');
-                        return;
-                      }
+                      // Step 2 no longer blocks — user may create invoice with only manual lines
                       setWizardStep(wizardStep + 1);
                     } else {
                       createInvoice();
@@ -1114,7 +1243,62 @@ export default function InvoicesIndex() {
 function Header({ isPro, active }) {
   const router = useRouter();
   return (
-    <AppHeader />
+    <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
+      <nav className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+        <Link href="/dashboard" className="flex items-center gap-3">
+          <ValopoLogo size={40} />
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-xl bg-gradient-to-r from-blue-700 to-blue-500 bg-clip-text text-transparent">Valopo</span>
+            <span
+              className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                isPro ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {isPro ? 'PRO' : 'FREE'}
+            </span>
+          </div>
+        </Link>
+        <div className="hidden md:flex items-center gap-2 sm:gap-4">
+          <Link
+            href="/dashboard"
+            className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
+          >
+            Dashboard
+          </Link>
+          <Link
+            href="/projects"
+            className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
+          >
+            Proyectos
+          </Link>
+          <Link
+            href="/clients"
+            className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
+          >
+            Clientes
+          </Link>
+          <Link
+            href="/invoices"
+            className={`px-3 sm:px-4 py-2 text-sm rounded-lg transition font-medium ${
+              active === 'invoices'
+                ? 'bg-blue-50 text-blue-700 font-semibold'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Facturas
+          </Link>
+        </div>
+        <button
+          onClick={async () => {
+            await supabase.auth.signOut();
+            router.push('/');
+          }}
+          className="md:hidden px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
+        >
+          Salir
+        </button>
+      </nav>
+    </header>
   );
 }
 
