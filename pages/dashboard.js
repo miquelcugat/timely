@@ -6,6 +6,7 @@ import { usePlan } from '../lib/usePlan';
 import OnboardingTour from '../components/OnboardingTour';
 import MobileNav from '../components/MobileNav';
 import ValopoLogo from '../components/ValopoLogo';
+import AppHeader from '../components/AppHeader';
 import {
   Clock,
   Target,
@@ -982,79 +983,7 @@ export default function Dashboard() {
       </Head>
 
       <div className="min-h-screen bg-slate-50">
-        {/* Header */}
-        <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
-          <nav className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <ValopoLogo size={40} />
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-xl bg-gradient-to-r from-blue-700 to-blue-500 bg-clip-text text-transparent">Valopo</span>
-                <span
-                  className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                    isPro
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
-                  {isPro ? 'PRO' : 'FREE'}
-                </span>
-                {isRunning && (
-                  <span className="ml-2 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                    EN CURSO
-                  </span>
-                )}
-              </div>
-            </div>
-            {/* Desktop nav - hidden on mobile */}
-            <div className="hidden md:flex items-center gap-2 sm:gap-4">
-              <button
-                onClick={() => router.push('/projects')}
-                className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
-              >
-                Mis proyectos
-              </button>
-              <button
-                onClick={() => router.push('/clients')}
-                className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
-              >
-                Mis clientes
-              </button>
-              <button
-                onClick={() => router.push('/invoices')}
-                className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
-              >
-                Facturas
-              </button>
-              <button
-                onClick={() => router.push('/account')}
-                className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
-              >
-                Mi cuenta
-              </button>
-              <span className="text-sm text-slate-600 hidden lg:inline">{user?.email}</span>
-              <button
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  router.push('/');
-                }}
-                className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
-              >
-                Salir
-              </button>
-            </div>
-            {/* Mobile: sign out button only */}
-            <button
-              onClick={async () => {
-                await supabase.auth.signOut();
-                router.push('/');
-              }}
-              className="md:hidden px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition font-medium"
-            >
-              Salir
-            </button>
-          </nav>
-        </header>
+        <AppHeader showRunningIndicator={isRunning} />
 
         <main className="max-w-6xl mx-auto px-6 py-8 sm:py-10 pb-24 md:pb-10">
           {/* ============= GOALS BLOCK (Nivel 1.5) ============= */}
